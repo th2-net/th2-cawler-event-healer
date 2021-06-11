@@ -1,0 +1,90 @@
+plugins {
+    id 'com.palantir.docker' version '0.25.0'
+    id 'java'
+    id 'java-library'
+    id 'application'
+}
+
+ext {
+    sharedDir           = file("${project.rootDir}/shared")
+}
+
+group = 'com.exactpro.th2'
+version = release_version
+
+sourceCompatibility = 11
+targetCompatibility = 11
+
+repositories {
+    maven {
+        name 'MavenLocal'
+        url sharedDir
+    }
+    mavenLocal()
+    mavenCentral()
+    maven {
+        name 'Sonatype_snapshots'
+        url 'https://s01.oss.sonatype.org/content/repositories/snapshots/'
+    }
+    maven {
+        name 'Sonatype_releases'
+        url 'https://s01.oss.sonatype.org/content/repositories/releases/'
+    }
+    maven {
+        name 'Nexus'
+        url 'https://nexus.exactpro.com/repository/oss-maven'
+    }
+
+    configurations.all {
+        resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
+        resolutionStrategy.cacheDynamicVersionsFor 0, 'seconds'
+    }
+}
+
+jar {
+    manifest {
+        attributes(
+                'Created-By':               "${System.getProperty('java.version')} (${System.getProperty('java.vendor')})",
+                'Specification-Title':      '',
+                'Specification-Vendor':     'Exactpro Systems LLC',
+                'Implementation-Title':     project.archivesBaseName,
+                'Implementation-Vendor':    'Exactpro Systems LLC',
+                'Implementation-Vendor-Id': 'com.exactpro',
+                'Implementation-Version':   project.version
+        )
+    }
+}
+
+dependencies {
+    api platform('com.exactpro.th2:bom:3.0.0')
+
+    api "com.exactpro.th2:common:3.13.4"
+    api "com.exactpro.th2:grpc-crawler-check2:0.0.1-check2_template-925457288-SNAPSHOT"
+
+    implementation "org.slf4j:slf4j-log4j12"
+    implementation "org.slf4j:slf4j-api"
+
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'}
+
+test {
+    useJUnitPlatform()
+}
+
+application {
+    mainClassName 'com.exactpro.th2.check2.bootstrap.Check2Main'
+}
+
+applicationName = 'service'
+
+distTar {
+    archiveName "${applicationName}.tar"
+}
+
+dockerPrepare {
+    dependsOn distTar
+}
+
+docker {
+    copySpec.from(tarTree("$buildDir/distributions/${applicationName}.tar"))
+}
