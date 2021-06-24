@@ -20,18 +20,20 @@ import com.exactpro.th2.check2.cfg.Check2Configuration;
 import com.exactpro.th2.common.grpc.ConnectionID;
 import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.MessageID;
-import com.exactpro.th2.crawlercheck2.grpc.Check2Grpc;
-import com.exactpro.th2.crawlercheck2.grpc.Check2Info;
-import com.exactpro.th2.crawlercheck2.grpc.CrawlerInfo;
-import com.exactpro.th2.crawlercheck2.grpc.Response;
 import com.exactpro.th2.dataprovider.grpc.EventData;
-import com.exactpro.th2.dataprovider.grpc.MessageData;
+import com.exactpro.th2.dataservice.grpc.Check2Info;
+import com.exactpro.th2.dataservice.grpc.CrawlerInfo;
+import com.exactpro.th2.dataservice.grpc.DataServiceGrpc;
+import com.exactpro.th2.dataservice.grpc.EventDataRequest;
+import com.exactpro.th2.dataservice.grpc.EventResponse;
+import com.exactpro.th2.dataservice.grpc.MessageDataRequest;
+import com.exactpro.th2.dataservice.grpc.MessageResponse;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
-public class Check2Handler extends Check2Grpc.Check2ImplBase {
+public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Check2Handler.class);
 
@@ -60,12 +62,23 @@ public class Check2Handler extends Check2Grpc.Check2ImplBase {
     }
 
     @Override
-    public void sendEvent(EventData request, StreamObserver<Response> responseObserver) {
+    public void sendEvent(EventDataRequest request, StreamObserver<EventResponse> responseObserver) {
         try {
             LOGGER.info("sendEvent request: {}", request);
-            Response response = Response.newBuilder()
-                    .setEventId(EventID.newBuilder().setId("fake event id").build())
+            EventResponse response = EventResponse.newBuilder()
+                    .setId(EventID.newBuilder().setId("fake event id").build())
                     .build();
+
+            EventData data = request.getEventDataList().get(request.getEventDataCount() - 1);
+            EventID id;
+
+            if (data.getIsBatched())
+                id = data.getBatchId();
+            else
+                id = data.getEventId();
+
+            LOGGER.info("ID of the last event from request: " + id);
+
             LOGGER.info("sendEvent response: {}", response);
             responseObserver.onNext(response);
         } catch (Exception e) {
@@ -77,14 +90,19 @@ public class Check2Handler extends Check2Grpc.Check2ImplBase {
     }
 
     @Override
-    public void sendMessage(MessageData request, StreamObserver<Response> responseObserver) {
+    public void sendMessage(MessageDataRequest request, StreamObserver<MessageResponse> responseObserver) {
         try {
             LOGGER.info("sendMessage request: {}", request);
-            Response response = Response.newBuilder()
-                    .setMessageId(MessageID.newBuilder()
+            MessageResponse response = MessageResponse.newBuilder()
+                    .setId(MessageID.newBuilder()
                             .setConnectionId(ConnectionID.newBuilder().setSessionAlias("fake session alias").build())
                             .build())
                     .build();
+
+            MessageID id = request.getMessageDataList().get(request.getMessageDataCount() - 1).getMessageId();
+
+            LOGGER.info("ID of the last event from request: " + id);
+
             LOGGER.info("sendMessage response: {}", response);
             responseObserver.onNext(response);
         } catch (Exception e) {
