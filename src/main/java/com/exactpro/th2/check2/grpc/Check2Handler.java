@@ -20,14 +20,14 @@ import com.exactpro.th2.check2.cfg.Check2Configuration;
 import com.exactpro.th2.common.grpc.ConnectionID;
 import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.MessageID;
+import com.exactpro.th2.crawler.dataservice.grpc.CrawlerInfo;
+import com.exactpro.th2.crawler.dataservice.grpc.DataServiceGrpc;
+import com.exactpro.th2.crawler.dataservice.grpc.DataServiceInfo;
+import com.exactpro.th2.crawler.dataservice.grpc.EventDataRequest;
+import com.exactpro.th2.crawler.dataservice.grpc.EventResponse;
+import com.exactpro.th2.crawler.dataservice.grpc.MessageDataRequest;
+import com.exactpro.th2.crawler.dataservice.grpc.MessageResponse;
 import com.exactpro.th2.dataprovider.grpc.EventData;
-import com.exactpro.th2.dataservice.grpc.Check2Info;
-import com.exactpro.th2.dataservice.grpc.CrawlerInfo;
-import com.exactpro.th2.dataservice.grpc.DataServiceGrpc;
-import com.exactpro.th2.dataservice.grpc.EventDataRequest;
-import com.exactpro.th2.dataservice.grpc.EventResponse;
-import com.exactpro.th2.dataservice.grpc.MessageDataRequest;
-import com.exactpro.th2.dataservice.grpc.MessageResponse;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,10 +44,10 @@ public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
     }
 
     @Override
-    public void crawlerConnect(CrawlerInfo request, StreamObserver<Check2Info> responseObserver) {
+    public void crawlerConnect(CrawlerInfo request, StreamObserver<DataServiceInfo> responseObserver) {
         try {
             LOGGER.info("crawlerConnect request: {}", request);
-            Check2Info response = Check2Info.newBuilder()
+            DataServiceInfo response = DataServiceInfo.newBuilder()
                     .setName(configuration.getName())
                     .setVersion(configuration.getVersion())
                     .build();
