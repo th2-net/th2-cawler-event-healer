@@ -126,24 +126,13 @@ public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
         }
     }
 
-    private void heal(Collection<EventData> events) throws IOException, CradleStorageException {
+    private void heal(Collection<EventData> events) throws IOException {
         List<StoredTestEventWrapper> eventAncestors;
 
         for (EventData event: events) {
             if (event.getSuccessful() == EventStatus.FAILED && event.hasParentEventId()) {
 
-                StoredTestEventWrapper eventWrapper = new StoredTestEventWrapper(StoredTestEvent
-                        .newStoredTestEventSingle(TestEventToStore.builder()
-                                .id(new StoredTestEventId(event.getEventId().getId()))
-                                .parentId(new StoredTestEventId(event.getParentEventId().getId()))
-                                .success(false)
-                                .name(event.getEventName())
-                                .type(event.getEventType())
-                                .startTimestamp(Instant.ofEpochSecond(event.getStartTimestamp().getSeconds(), event.getStartTimestamp().getNanos()))
-                                .content(event.getBody().toByteArray())
-                                .build()));
-
-                eventAncestors = getAncestors(eventWrapper);
+                eventAncestors = getAncestors(event);
 
                 for (StoredTestEventWrapper ancestor : eventAncestors) {
                     if (ancestor.isSuccess()) {
@@ -156,22 +145,22 @@ public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
         }
     }
 
-    private List<StoredTestEventWrapper> getAncestors(StoredTestEventWrapper event) throws IOException {
+    private List<StoredTestEventWrapper> getAncestors(EventData event) throws IOException {
         List<StoredTestEventWrapper> eventAncestors = new ArrayList<>();
-        StoredTestEventId parentId = event.getParentId();
+        String parentId = event.getParentEventId().getId();
 
         while (parentId != null) {
             StoredTestEventWrapper parent;
 
-            if (cache.containsKey(parentId.toString())) {
-                parent = cache.get(parentId.toString());
+            if (cache.containsKey(parentId)) {
+                parent = cache.get(parentId);
                 eventAncestors.add(parent);
             } else {
-                parent = storage.getTestEvent(parentId);
-                cache.put(parentId.toString(), parent);
+                parent = storage.getTestEvent(new StoredTestEventId(parentId));
+                cache.put(parentId, parent);
             }
 
-            parentId = parent.getParentId();
+            parentId = parent.getParentId().toString();
         }
 
         return eventAncestors;
