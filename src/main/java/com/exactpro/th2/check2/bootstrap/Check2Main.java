@@ -16,6 +16,7 @@
 
 package com.exactpro.th2.check2.bootstrap;
 
+import com.exactpro.cradle.CradleStorage;
 import com.exactpro.th2.check2.cfg.Check2Configuration;
 import com.exactpro.th2.check2.grpc.Check2Handler;
 import com.exactpro.th2.common.schema.factory.CommonFactory;
@@ -54,8 +55,9 @@ public class Check2Main {
             resources.add(grpcRouter);
 
             Check2Configuration configuration = new Check2Configuration(NAME, VERSION);
+            CradleStorage storage = factory.getCradleManager().getStorage();
 
-            Check2Handler check2Handler = new Check2Handler(configuration);
+            Check2Handler check2Handler = new Check2Handler(configuration, storage);
 
             Check2Server check2Server = new Check2Server(grpcRouter.startServer(check2Handler));
             resources.add(check2Server::stop);

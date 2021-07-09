@@ -16,9 +16,18 @@
 
 package com.exactpro.th2.check2.grpc;
 
+import com.exactpro.cradle.CradleStorage;
+import com.exactpro.cradle.intervals.Interval;
+import com.exactpro.cradle.testevents.StoredTestEvent;
+import com.exactpro.cradle.testevents.StoredTestEventId;
+import com.exactpro.cradle.testevents.StoredTestEventWrapper;
+import com.exactpro.cradle.testevents.TestEventToStore;
+import com.exactpro.cradle.utils.CradleStorageException;
 import com.exactpro.th2.check2.cfg.Check2Configuration;
+import com.exactpro.th2.common.event.EventUtils;
 import com.exactpro.th2.common.grpc.ConnectionID;
 import com.exactpro.th2.common.grpc.EventID;
+import com.exactpro.th2.common.grpc.EventStatus;
 import com.exactpro.th2.common.grpc.MessageID;
 import com.exactpro.th2.crawler.dataservice.grpc.CrawlerInfo;
 import com.exactpro.th2.crawler.dataservice.grpc.DataServiceGrpc;
@@ -32,15 +41,26 @@ import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.List;
+
 
 public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Check2Handler.class);
 
     private final Check2Configuration configuration;
+    private final CradleStorage storage;
+    private final LinkedHashMap<String, StoredTestEventWrapper> cache;
 
-    public Check2Handler(Check2Configuration configuration) {
+    public Check2Handler(Check2Configuration configuration, CradleStorage storage) {
         this.configuration = configuration;
+        this.storage = storage;
+        this.cache = new LinkedHashMap<>(1000);
     }
 
     @Override
@@ -65,19 +85,12 @@ public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
     public void sendEvent(EventDataRequest request, StreamObserver<EventResponse> responseObserver) {
         try {
             LOGGER.info("sendEvent request: {}", request);
-            EventResponse response = EventResponse.newBuilder()
-                    .setId(EventID.newBuilder().setId("fake event id").build())
-                    .build();
 
-            EventData data = request.getEventDataList().get(request.getEventDataCount() - 1);
-            EventID id;
+            String lastEventId = request.getEventDataList().get(request.getEventDataCount() - 1).getEventId().toString();
 
-            if (data.getIsBatched())
-                id = data.getBatchId();
-            else
-                id = data.getEventId();
+            heal(request.getEventDataList());
 
-            LOGGER.info("ID of the last event from request: " + id);
+            EventResponse response = EventResponse.newBuilder().setId(EventID.newBuilder().setId(lastEventId).build()).build();
 
             LOGGER.info("sendEvent response: {}", response);
             responseObserver.onNext(response);
@@ -111,6 +124,57 @@ public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
         } finally {
             responseObserver.onCompleted();
         }
+    }
+
+    private void heal(Collection<EventData> events) throws IOException, CradleStorageException {
+        List<StoredTestEventWrapper> eventAncestors;
+
+        for (EventData event: events) {
+            if (event.getSuccessful() == EventStatus.FAILED && event.hasParentEventId()) {
+
+                StoredTestEventWrapper eventWrapper = new StoredTestEventWrapper(StoredTestEvent
+                        .newStoredTestEventSingle(TestEventToStore.builder()
+                                .id(new StoredTestEventId(event.getEventId().getId()))
+                                .parentId(new StoredTestEventId(event.getParentEventId().getId()))
+                                .success(false)
+                                .name(event.getEventName())
+                                .type(event.getEventType())
+                                .startTimestamp(Instant.ofEpochSecond(event.getStartTimestamp().getSeconds(), event.getStartTimestamp().getNanos()))
+                                .content(event.getBody().toByteArray())
+                                .build()));
+
+                eventAncestors = getAncestors(eventWrapper);
+
+                for (StoredTestEventWrapper ancestor : eventAncestors) {
+                    if (ancestor.isSuccess()) {
+                        storage.updateEventStatus(ancestor, false);
+                        LOGGER.info("Event {} healed", ancestor.getId().toString());
+                    }
+                }
+
+            }
+        }
+    }
+
+    private List<StoredTestEventWrapper> getAncestors(StoredTestEventWrapper event) throws IOException {
+        List<StoredTestEventWrapper> eventAncestors = new ArrayList<>();
+        StoredTestEventId parentId = event.getParentId();
+
+        while (parentId != null) {
+            StoredTestEventWrapper parent;
+
+            if (cache.containsKey(parentId.toString())) {
+                parent = cache.get(parentId.toString());
+                eventAncestors.add(parent);
+            } else {
+                parent = storage.getTestEvent(parentId);
+                cache.put(parentId.toString(), parent);
+            }
+
+            parentId = parent.getParentId();
+        }
+
+        return eventAncestors;
     }
 
 }
