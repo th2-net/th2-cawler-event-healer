@@ -154,11 +154,12 @@ public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
 
             if (cache.containsKey(parentId)) {
                 parent = cache.get(parentId);
-                eventAncestors.add(parent);
             } else {
                 parent = storage.getTestEvent(new StoredTestEventId(parentId));
                 cache.put(parentId, parent);
             }
+
+            eventAncestors.add(parent);
 
             parentId = parent.getParentId().toString();
         }
