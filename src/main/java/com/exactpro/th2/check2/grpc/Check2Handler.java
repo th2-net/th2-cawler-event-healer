@@ -92,7 +92,7 @@ public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
             EventResponse.Builder builder = EventResponse.newBuilder().setStatus(Status.newBuilder().setHandshakeRequired(false).build());
 
             if (lastEventId != null) {
-                builder.setId(EventID.newBuilder().setId(lastEventId.getId()).build());
+                builder.setId(lastEventId);
             }
 
             EventResponse response = builder.build();
@@ -106,22 +106,21 @@ public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
         }
     }
 
-    @Override
-    public void sendMessage(MessageDataRequest request, StreamObserver<MessageResponse> responseObserver) { }
-
     private void heal(Collection<EventData> events) throws IOException {
-        List<StoredTestEventWrapper> eventAncestors;
+        List<InnerEvent> eventAncestors;
 
         for (EventData event: events) {
             if (event.getSuccessful() == EventStatus.FAILED && event.hasParentEventId()) {
 
                 eventAncestors = getAncestors(event);
 
-                for (StoredTestEventWrapper ancestor : eventAncestors) {
-                    if (ancestor.isSuccess()) {
-                        storage.updateEventStatus(ancestor, false);
-                        cache.get(ancestor.getId().toString()).status = false;
-                        LOGGER.info("Event {} healed", ancestor.getId());
+                for (InnerEvent ancestor : eventAncestors) {
+                    StoredTestEventWrapper ancestorEvent = ancestor.event;
+
+                    if (ancestor.status) {
+                        storage.updateEventStatus(ancestorEvent, false);
+                        cache.get(ancestorEvent.getId().toString()).markFailed();
+                        LOGGER.info("Event {} healed", ancestorEvent.getId());
                     }
                 }
 
@@ -129,23 +128,25 @@ public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
         }
     }
 
-    private List<StoredTestEventWrapper> getAncestors(EventData event) throws IOException {
-        List<StoredTestEventWrapper> eventAncestors = new ArrayList<>();
+    private List<InnerEvent> getAncestors(EventData event) throws IOException {
+        List<InnerEvent> eventAncestors = new ArrayList<>();
         String parentId = event.getParentEventId().getId();
 
         while (parentId != null) {
-            StoredTestEventWrapper parent;
+            InnerEvent innerEvent;
 
             if (cache.containsKey(parentId)) {
-                parent = cache.get(parentId).event;
+                innerEvent = cache.get(parentId);
             } else {
-                parent = storage.getTestEvent(new StoredTestEventId(parentId));
-                cache.put(parentId, new InnerEvent(parent, parent.isSuccess()));
+                StoredTestEventWrapper parent = storage.getTestEvent(new StoredTestEventId(parentId));
+
+                innerEvent = new InnerEvent(parent, parent.isSuccess());
+                cache.put(parentId, innerEvent);
             }
 
-            eventAncestors.add(parent);
+            eventAncestors.add(innerEvent);
 
-            parentId = parent.getParentId().toString();
+            parentId = innerEvent.event.getParentId().toString();
         }
 
         return eventAncestors;
@@ -155,10 +156,12 @@ public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
         private final StoredTestEventWrapper event;
         private boolean status;
 
-        public InnerEvent(StoredTestEventWrapper event, boolean status) {
+        private InnerEvent(StoredTestEventWrapper event, boolean status) {
             this.event = event;
             this.status = status;
         }
+
+        private void markFailed() { this.status = false; }
     }
 
 }

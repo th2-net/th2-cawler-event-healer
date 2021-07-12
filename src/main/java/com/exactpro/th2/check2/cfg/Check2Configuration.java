@@ -27,6 +27,10 @@ public class Check2Configuration {
     public Check2Configuration(String name, String version, int cacheSize) {
         this.name = Objects.requireNonNull(name, "name is required");
         this.version = Objects.requireNonNull(version, "version is required");
+
+        if (cacheSize < 0)
+            throw new IllegalArgumentException("Size of cache cannot be negative");
+
         this.cacheSize = cacheSize;
     }
 
