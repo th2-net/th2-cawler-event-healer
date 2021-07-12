@@ -27,8 +27,6 @@ import com.exactpro.th2.crawler.dataservice.grpc.DataServiceGrpc;
 import com.exactpro.th2.crawler.dataservice.grpc.DataServiceInfo;
 import com.exactpro.th2.crawler.dataservice.grpc.EventDataRequest;
 import com.exactpro.th2.crawler.dataservice.grpc.EventResponse;
-import com.exactpro.th2.crawler.dataservice.grpc.MessageDataRequest;
-import com.exactpro.th2.crawler.dataservice.grpc.MessageResponse;
 import com.exactpro.th2.crawler.dataservice.grpc.Status;
 import com.exactpro.th2.dataprovider.grpc.EventData;
 import io.grpc.stub.StreamObserver;
@@ -117,9 +115,9 @@ public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
                 for (InnerEvent ancestor : eventAncestors) {
                     StoredTestEventWrapper ancestorEvent = ancestor.event;
 
-                    if (ancestor.status) {
+                    if (ancestor.success) {
                         storage.updateEventStatus(ancestorEvent, false);
-                        cache.get(ancestorEvent.getId().toString()).markFailed();
+                        ancestor.markFailed();
                         LOGGER.info("Event {} healed", ancestorEvent.getId());
                     }
                 }
@@ -154,14 +152,14 @@ public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
 
     private static class InnerEvent {
         private final StoredTestEventWrapper event;
-        private boolean status;
+        private boolean success;
 
-        private InnerEvent(StoredTestEventWrapper event, boolean status) {
+        private InnerEvent(StoredTestEventWrapper event, boolean success) {
             this.event = event;
-            this.status = status;
+            this.success = success;
         }
 
-        private void markFailed() { this.status = false; }
+        private void markFailed() { this.success = false; }
     }
 
 }
