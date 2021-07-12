@@ -17,18 +17,11 @@
 package com.exactpro.th2.check2.grpc;
 
 import com.exactpro.cradle.CradleStorage;
-import com.exactpro.cradle.intervals.Interval;
-import com.exactpro.cradle.testevents.StoredTestEvent;
 import com.exactpro.cradle.testevents.StoredTestEventId;
 import com.exactpro.cradle.testevents.StoredTestEventWrapper;
-import com.exactpro.cradle.testevents.TestEventToStore;
-import com.exactpro.cradle.utils.CradleStorageException;
 import com.exactpro.th2.check2.cfg.Check2Configuration;
-import com.exactpro.th2.common.event.EventUtils;
-import com.exactpro.th2.common.grpc.ConnectionID;
 import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.EventStatus;
-import com.exactpro.th2.common.grpc.MessageID;
 import com.exactpro.th2.crawler.dataservice.grpc.CrawlerInfo;
 import com.exactpro.th2.crawler.dataservice.grpc.DataServiceGrpc;
 import com.exactpro.th2.crawler.dataservice.grpc.DataServiceInfo;
@@ -36,17 +29,18 @@ import com.exactpro.th2.crawler.dataservice.grpc.EventDataRequest;
 import com.exactpro.th2.crawler.dataservice.grpc.EventResponse;
 import com.exactpro.th2.crawler.dataservice.grpc.MessageDataRequest;
 import com.exactpro.th2.crawler.dataservice.grpc.MessageResponse;
+import com.exactpro.th2.crawler.dataservice.grpc.Status;
 import com.exactpro.th2.dataprovider.grpc.EventData;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Objects;
 
 
 public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
@@ -55,12 +49,12 @@ public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
 
     private final Check2Configuration configuration;
     private final CradleStorage storage;
-    private final LinkedHashMap<String, StoredTestEventWrapper> cache;
+    private final LinkedHashMap<String, InnerEvent> cache;
 
     public Check2Handler(Check2Configuration configuration, CradleStorage storage) {
         this.configuration = configuration;
-        this.storage = storage;
-        this.cache = new LinkedHashMap<>(1000);
+        this.storage = Objects.requireNonNull(storage, "Cradle storage cannot be null");
+        this.cache = new LinkedHashMap<>(configuration.getCacheSize());
     }
 
     @Override
@@ -73,11 +67,10 @@ public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
                     .build();
             LOGGER.info("crawlerConnect response: {}", response);
             responseObserver.onNext(response);
+            responseObserver.onCompleted();
         } catch (Exception e) {
             responseObserver.onError(e);
             LOGGER.error("crawlerConnect error: " + e.getMessage(), e);
-        } finally {
-            responseObserver.onCompleted();
         }
     }
 
@@ -86,45 +79,35 @@ public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
         try {
             LOGGER.info("sendEvent request: {}", request);
 
-            String lastEventId = request.getEventDataList().get(request.getEventDataCount() - 1).getEventId().toString();
+            int eventsCount = request.getEventDataCount();
 
             heal(request.getEventDataList());
 
-            EventResponse response = EventResponse.newBuilder().setId(EventID.newBuilder().setId(lastEventId).build()).build();
+            EventID lastEventId = null;
+
+            if (eventsCount > 0) {
+                lastEventId = request.getEventDataList().get(eventsCount - 1).getEventId();
+            }
+
+            EventResponse.Builder builder = EventResponse.newBuilder().setStatus(Status.newBuilder().setHandshakeRequired(false).build());
+
+            if (lastEventId != null) {
+                builder.setId(EventID.newBuilder().setId(lastEventId.getId()).build());
+            }
+
+            EventResponse response = builder.build();
 
             LOGGER.info("sendEvent response: {}", response);
             responseObserver.onNext(response);
+            responseObserver.onCompleted();
         } catch (Exception e) {
             responseObserver.onError(e);
             LOGGER.error("sendEvent error: " + e, e);
-        } finally {
-            responseObserver.onCompleted();
         }
     }
 
     @Override
-    public void sendMessage(MessageDataRequest request, StreamObserver<MessageResponse> responseObserver) {
-        try {
-            LOGGER.info("sendMessage request: {}", request);
-            MessageResponse response = MessageResponse.newBuilder()
-                    .setId(MessageID.newBuilder()
-                            .setConnectionId(ConnectionID.newBuilder().setSessionAlias("fake session alias").build())
-                            .build())
-                    .build();
-
-            MessageID id = request.getMessageDataList().get(request.getMessageDataCount() - 1).getMessageId();
-
-            LOGGER.info("ID of the last event from request: " + id);
-
-            LOGGER.info("sendMessage response: {}", response);
-            responseObserver.onNext(response);
-        } catch (Exception e) {
-            responseObserver.onError(e);
-            LOGGER.error("sendMessage error: " + e, e);
-        } finally {
-            responseObserver.onCompleted();
-        }
-    }
+    public void sendMessage(MessageDataRequest request, StreamObserver<MessageResponse> responseObserver) { }
 
     private void heal(Collection<EventData> events) throws IOException {
         List<StoredTestEventWrapper> eventAncestors;
@@ -137,7 +120,8 @@ public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
                 for (StoredTestEventWrapper ancestor : eventAncestors) {
                     if (ancestor.isSuccess()) {
                         storage.updateEventStatus(ancestor, false);
-                        LOGGER.info("Event {} healed", ancestor.getId().toString());
+                        cache.get(ancestor.getId().toString()).status = false;
+                        LOGGER.info("Event {} healed", ancestor.getId());
                     }
                 }
 
@@ -153,10 +137,10 @@ public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
             StoredTestEventWrapper parent;
 
             if (cache.containsKey(parentId)) {
-                parent = cache.get(parentId);
+                parent = cache.get(parentId).event;
             } else {
                 parent = storage.getTestEvent(new StoredTestEventId(parentId));
-                cache.put(parentId, parent);
+                cache.put(parentId, new InnerEvent(parent, parent.isSuccess()));
             }
 
             eventAncestors.add(parent);
@@ -165,6 +149,16 @@ public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
         }
 
         return eventAncestors;
+    }
+
+    private static class InnerEvent {
+        private final StoredTestEventWrapper event;
+        private boolean status;
+
+        public InnerEvent(StoredTestEventWrapper event, boolean status) {
+            this.event = event;
+            this.status = status;
+        }
     }
 
 }

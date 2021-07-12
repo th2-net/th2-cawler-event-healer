@@ -22,10 +22,12 @@ public class Check2Configuration {
 
     private final String name;
     private final String version;
+    private final int cacheSize;
 
-    public Check2Configuration(String name, String version) {
+    public Check2Configuration(String name, String version, int cacheSize) {
         this.name = Objects.requireNonNull(name, "name is required");
         this.version = Objects.requireNonNull(version, "version is required");
+        this.cacheSize = cacheSize;
     }
 
     public String getName() {
@@ -36,4 +38,5 @@ public class Check2Configuration {
         return version;
     }
 
+    public int getCacheSize() { return cacheSize; }
 }

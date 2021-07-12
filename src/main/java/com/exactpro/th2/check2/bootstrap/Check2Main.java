@@ -54,7 +54,7 @@ public class Check2Main {
             GrpcRouter grpcRouter = factory.getGrpcRouter();
             resources.add(grpcRouter);
 
-            Check2Configuration configuration = new Check2Configuration(NAME, VERSION);
+            Check2Configuration configuration = new Check2Configuration(NAME, VERSION, 1000);
             CradleStorage storage = factory.getCradleManager().getStorage();
 
             Check2Handler check2Handler = new Check2Handler(configuration, storage);
