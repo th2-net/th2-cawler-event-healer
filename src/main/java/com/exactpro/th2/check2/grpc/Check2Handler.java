@@ -22,6 +22,7 @@ import com.exactpro.cradle.testevents.StoredTestEventWrapper;
 import com.exactpro.th2.check2.cfg.Check2Configuration;
 import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.EventStatus;
+import com.exactpro.th2.crawler.dataservice.grpc.CrawlerId;
 import com.exactpro.th2.crawler.dataservice.grpc.CrawlerInfo;
 import com.exactpro.th2.crawler.dataservice.grpc.DataServiceGrpc;
 import com.exactpro.th2.crawler.dataservice.grpc.DataServiceInfo;
@@ -36,9 +37,12 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+
+import static com.exactpro.th2.common.message.MessageUtils.toJson;
 
 
 public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
@@ -47,23 +51,29 @@ public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
 
     private final Check2Configuration configuration;
     private final CradleStorage storage;
-    private final LinkedHashMap<String, InnerEvent> cache;
+    private final ConcurrentMap<String, InnerEvent> cache;
+    private final ConcurrentHashMap.KeySetView<CrawlerId, Boolean> knownCrawlers;
 
     public Check2Handler(Check2Configuration configuration, CradleStorage storage) {
         this.configuration = configuration;
         this.storage = Objects.requireNonNull(storage, "Cradle storage cannot be null");
-        this.cache = new LinkedHashMap<>(configuration.getCacheSize());
+        this.cache = new ConcurrentHashMap<>(configuration.getCacheSize());
+        this.knownCrawlers = ConcurrentHashMap.newKeySet();
     }
 
     @Override
     public void crawlerConnect(CrawlerInfo request, StreamObserver<DataServiceInfo> responseObserver) {
         try {
             LOGGER.info("crawlerConnect request: {}", request);
+            knownCrawlers.add(request.getId());
+
             DataServiceInfo response = DataServiceInfo.newBuilder()
                     .setName(configuration.getName())
                     .setVersion(configuration.getVersion())
                     .build();
+
             LOGGER.info("crawlerConnect response: {}", response);
+
             responseObserver.onNext(response);
             responseObserver.onCompleted();
         } catch (Exception e) {
@@ -76,6 +86,15 @@ public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
     public void sendEvent(EventDataRequest request, StreamObserver<EventResponse> responseObserver) {
         try {
             LOGGER.info("sendEvent request: {}", request);
+
+            if (!knownCrawlers.contains(request.getId())) {
+                LOGGER.warn("Received request from unknown crawler with id {}. Sending response with HandshakeRequired = true", toJson(request.getId()));
+                responseObserver.onNext(EventResponse.newBuilder()
+                        .setStatus(Status.newBuilder().setHandshakeRequired(true))
+                        .build());
+                responseObserver.onCompleted();
+                return;
+            }
 
             int eventsCount = request.getEventDataCount();
 
@@ -152,7 +171,7 @@ public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
 
     private static class InnerEvent {
         private final StoredTestEventWrapper event;
-        private boolean success;
+        private volatile boolean success;
 
         private InnerEvent(StoredTestEventWrapper event, boolean success) {
             this.event = event;
