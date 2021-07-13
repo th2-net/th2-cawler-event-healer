@@ -6,7 +6,6 @@ on:
       - master
       - version-*
 
-
 jobs:
   build:
     runs-on: ubuntu-20.04
@@ -44,3 +43,5 @@ jobs:
           push: true
           tags: ghcr.io/${{ github.repository }}:${{ steps.release_ver.outputs.value }}
           labels: com.exactpro.th2.${{ steps.meta.outputs.REPOSITORY_NAME }}=${{ steps.ver.outputs.value }}
+          build-args: |
+            release_version=${{ steps.release_ver.outputs.value }}
