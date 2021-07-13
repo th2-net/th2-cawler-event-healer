@@ -19,6 +19,7 @@ package com.exactpro.th2.check2.grpc;
 import com.exactpro.cradle.CradleStorage;
 import com.exactpro.cradle.testevents.StoredTestEventId;
 import com.exactpro.cradle.testevents.StoredTestEventWrapper;
+import com.exactpro.th2.check2.cache.EventsCache;
 import com.exactpro.th2.check2.cfg.Check2Configuration;
 import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.EventStatus;
@@ -38,9 +39,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 import static com.exactpro.th2.common.message.MessageUtils.toJson;
 
@@ -51,13 +52,13 @@ public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
 
     private final Check2Configuration configuration;
     private final CradleStorage storage;
-    private final ConcurrentMap<String, InnerEvent> cache;
+    private final Map<String, InnerEvent> cache;
     private final ConcurrentHashMap.KeySetView<CrawlerId, Boolean> knownCrawlers;
 
     public Check2Handler(Check2Configuration configuration, CradleStorage storage) {
         this.configuration = configuration;
         this.storage = Objects.requireNonNull(storage, "Cradle storage cannot be null");
-        this.cache = new ConcurrentHashMap<>(configuration.getCacheSize());
+        this.cache = new EventsCache<>(configuration.getCacheSize());
         this.knownCrawlers = ConcurrentHashMap.newKeySet();
     }
 
@@ -106,7 +107,7 @@ public class Check2Handler extends DataServiceGrpc.DataServiceImplBase {
                 lastEventId = request.getEventDataList().get(eventsCount - 1).getEventId();
             }
 
-            EventResponse.Builder builder = EventResponse.newBuilder().setStatus(Status.newBuilder().setHandshakeRequired(false).build());
+            EventResponse.Builder builder = EventResponse.newBuilder();
 
             if (lastEventId != null) {
                 builder.setId(lastEventId);
