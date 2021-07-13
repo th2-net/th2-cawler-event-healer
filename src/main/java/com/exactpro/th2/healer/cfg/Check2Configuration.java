@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.exactpro.th2.check2.cfg;
+package com.exactpro.th2.healer.cfg;
 
 import java.util.Objects;
 

@@ -14,27 +14,29 @@
  * limitations under the License.
  */
 
-package com.exactpro.th2.check2.bootstrap;
+package com.exactpro.th2.healer;
 
 import com.exactpro.cradle.CradleStorage;
-import com.exactpro.th2.check2.cfg.Check2Configuration;
-import com.exactpro.th2.check2.grpc.Check2Handler;
+import com.exactpro.th2.healer.cfg.Check2Configuration;
+import com.exactpro.th2.healer.grpc.HealerServiceImpl;
 import com.exactpro.th2.common.schema.factory.CommonFactory;
 import com.exactpro.th2.common.schema.grpc.router.GrpcRouter;
+import io.grpc.Server;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Deque;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static com.exactpro.th2.common.metrics.CommonMetrics.setLiveness;
 import static com.exactpro.th2.common.metrics.CommonMetrics.setReadiness;
 
-public class Check2Main {
+public class BoxMain {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(Check2Main.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(BoxMain.class);
 
     public static final String NAME = "Check2 demo";
     public static final String VERSION = "0.0.1";
@@ -57,10 +59,20 @@ public class Check2Main {
             Check2Configuration configuration = new Check2Configuration(NAME, VERSION, 1000);
             CradleStorage storage = factory.getCradleManager().getStorage();
 
-            Check2Handler check2Handler = new Check2Handler(configuration, storage);
+            HealerServiceImpl handler = new HealerServiceImpl(configuration, storage);
 
-            Check2Server check2Server = new Check2Server(grpcRouter.startServer(check2Handler));
-            resources.add(check2Server::stop);
+            Server server = grpcRouter.startServer(handler).start();
+            resources.add(() -> {
+                LOGGER.info("Shutting down Healer gRPC server");
+
+                TimeUnit unit = TimeUnit.SECONDS;
+                long timeout = 5L;
+
+                if (server.shutdown().awaitTermination(timeout, unit)) {
+                    LOGGER.warn("Cannot shutdown server in {} millis. Shutdown now", unit.toMillis(timeout));
+                    server.shutdownNow();
+                }
+            });
 
             setReadiness(true);
 
