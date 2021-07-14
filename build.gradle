@@ -30,10 +30,6 @@ repositories {
         name 'Sonatype_releases'
         url 'https://s01.oss.sonatype.org/content/repositories/releases/'
     }
-    maven {
-        name 'Nexus'
-        url 'https://nexus.exactpro.com/repository/oss-maven'
-    }
 
     configurations.all {
         resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
@@ -74,7 +70,7 @@ test {
 }
 
 application {
-    mainClassName 'com.exactpro.th2.check2.bootstrap.Check2Main'
+    mainClassName 'com.exactpro.th2.healer.BoxMain'
 }
 
 applicationName = 'service'

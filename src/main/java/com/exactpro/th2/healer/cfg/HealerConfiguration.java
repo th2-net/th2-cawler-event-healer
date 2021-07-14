@@ -35,6 +35,14 @@ public class HealerConfiguration {
         this.name = Objects.requireNonNull(name, "Name is required");
         this.version = Objects.requireNonNull(version, "Version is required");
 
+        if (name.trim().isEmpty()) {
+            throw new IllegalArgumentException("Name of Healer cannot be empty");
+        }
+
+        if (version.trim().isEmpty()) {
+            throw new IllegalArgumentException("Version of Healer cannot be empty");
+        }
+
         if (maxCacheCapacity <= 0)
             throw new IllegalArgumentException("Size of cache cannot be negative or zero");
 

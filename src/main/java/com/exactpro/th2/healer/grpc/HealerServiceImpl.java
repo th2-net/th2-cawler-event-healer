@@ -36,11 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static com.exactpro.th2.common.message.MessageUtils.toJson;
@@ -53,13 +49,12 @@ public class HealerServiceImpl extends DataServiceGrpc.DataServiceImplBase {
     private final HealerConfiguration configuration;
     private final CradleStorage storage;
     private final Map<String, InnerEvent> cache;
-    private final ConcurrentHashMap.KeySetView<CrawlerId, Boolean> knownCrawlers;
+    private final Set<CrawlerId> knownCrawlers = ConcurrentHashMap.newKeySet();
 
     public HealerServiceImpl(HealerConfiguration configuration, CradleStorage storage) {
-        this.configuration = configuration;
+        this.configuration = Objects.requireNonNull(configuration, "Configuration cannot be null");
         this.storage = Objects.requireNonNull(storage, "Cradle storage cannot be null");
         this.cache = new EventsCache<>(configuration.getMaxCacheCapacity());
-        this.knownCrawlers = ConcurrentHashMap.newKeySet();
     }
 
     @Override
@@ -78,7 +73,9 @@ public class HealerServiceImpl extends DataServiceGrpc.DataServiceImplBase {
                     .setVersion(configuration.getVersion())
                     .build();
 
-            LOGGER.info("crawlerConnect response: {}", response);
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("crawlerConnect response: {}", toJson(response, true));
+            }
 
             responseObserver.onNext(response);
             responseObserver.onCompleted();
@@ -91,12 +88,14 @@ public class HealerServiceImpl extends DataServiceGrpc.DataServiceImplBase {
     @Override
     public void sendEvent(EventDataRequest request, StreamObserver<EventResponse> responseObserver) {
         try {
-            LOGGER.info("sendEvent request: {}", request);
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("sendEvent request: {}", toJson(request, true));
+            }
 
             if (!knownCrawlers.contains(request.getId())) {
 
                 if (LOGGER.isWarnEnabled()) {
-                    LOGGER.warn("Received request from unknown crawler with id {}. Sending response with HandshakeRequired = true", toJson(request.getId()));
+                    LOGGER.warn("Received request from unknown crawler with id {}. Sending response with HandshakeRequired = true", toJson(request.getId(), true));
                 }
 
                 responseObserver.onNext(EventResponse.newBuilder()
@@ -124,7 +123,10 @@ public class HealerServiceImpl extends DataServiceGrpc.DataServiceImplBase {
 
             EventResponse response = builder.build();
 
-            LOGGER.info("sendEvent response: {}", response);
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("sendEvent response: {}", toJson(response, true));
+            }
+
             responseObserver.onNext(response);
             responseObserver.onCompleted();
         } catch (Exception e) {
