@@ -42,6 +42,15 @@ spec:
       cpu: 50m
 ```
 
+### Parameters description
+
++ name - the data service name
++ version - the data service version
++ maxCacheCapacity - maximum capacity of the cache that stores 
+  events processed by Healer to avoid acquiring them again from Cradle.
+  After reaching maximum capacity, the least recent accessed event 
+  in the cache will be removed, so no overflow happens.
+
 # Useful links
 
 + https://github.com/th2-net/th2-crawler-event-healer
