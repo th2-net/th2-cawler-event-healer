@@ -19,7 +19,6 @@ spec:
   custom-config:
     name: test-event-healer
     version: 1.0.0
-    initialCacheCapacity: 500
     maxCacheCapacity: 100000
   pins:
     - name: server

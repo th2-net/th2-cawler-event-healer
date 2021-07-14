@@ -27,10 +27,13 @@ public class EventsCache<K, V> extends LinkedHashMap<K, V> {
     private final Lock writeLock;
     private final Lock readLock;
 
-    public EventsCache(int initialCapacity, int maxCapacity) {
-        super(initialCapacity);
+    private static final int DEFAULT_INITIAL_CAPACITY = 16;
+    private static final float DEFAULT_LOAD_FACTOR = 0.75f;
 
-        if (initialCapacity <= 0 || maxCapacity <= 0)
+    public EventsCache(int maxCapacity) {
+        super(DEFAULT_INITIAL_CAPACITY, DEFAULT_LOAD_FACTOR, true);
+
+        if (maxCapacity <= 0)
             throw new IllegalArgumentException("Capacity of EventsCache cannot be zero or negative");
 
         this.maxCapacity = maxCapacity;

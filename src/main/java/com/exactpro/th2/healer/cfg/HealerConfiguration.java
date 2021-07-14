@@ -16,49 +16,34 @@
 
 package com.exactpro.th2.healer.cfg;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.Objects;
 
 public class HealerConfiguration {
 
-    @JsonProperty
-    private String name;
-    @JsonProperty
-    private String version;
-    @JsonProperty
-    private int initialCacheCapacity;
-    @JsonProperty
-    private int maxCacheCapacity;
 
-    public HealerConfiguration(String name, String version, int initialCacheCapacity, int maxCacheCapacity) {
+    private final String name;
+    private final String version;
+    private final int maxCacheCapacity;
+
+    @JsonCreator
+    public HealerConfiguration(@JsonProperty("name") String name,
+                               @JsonProperty("version") String version,
+                               @JsonProperty("maxCacheCapacity") int maxCacheCapacity) {
         this.name = Objects.requireNonNull(name, "Name is required");
         this.version = Objects.requireNonNull(version, "Version is required");
 
-        if (initialCacheCapacity <= 0 || maxCacheCapacity <= 0)
+        if (maxCacheCapacity <= 0)
             throw new IllegalArgumentException("Size of cache cannot be negative or zero");
 
-        this.initialCacheCapacity = initialCacheCapacity;
         this.maxCacheCapacity = maxCacheCapacity;
     }
 
-    public String getName() {
-        return name;
-    }
+    public String getName() { return name; }
 
-    public void setName(String name) { this.name = name; }
-
-    public String getVersion() {
-        return version;
-    }
-
-    public void setVersion(String version) { this.version = version; }
-
-    public int getInitialCacheCapacity() { return initialCacheCapacity; }
-
-    public void setInitialCacheCapacity(int initialCacheCapacity) { this.initialCacheCapacity = initialCacheCapacity; }
+    public String getVersion() { return version; }
 
     public int getMaxCacheCapacity() { return maxCacheCapacity; }
-
-    public void setMaxCacheCapacity(int maxCacheCapacity) { this.maxCacheCapacity = maxCacheCapacity; }
 }

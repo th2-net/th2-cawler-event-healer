@@ -58,7 +58,7 @@ public class HealerServiceImpl extends DataServiceGrpc.DataServiceImplBase {
     public HealerServiceImpl(HealerConfiguration configuration, CradleStorage storage) {
         this.configuration = configuration;
         this.storage = Objects.requireNonNull(storage, "Cradle storage cannot be null");
-        this.cache = new EventsCache<>(configuration.getInitialCacheCapacity(), configuration.getMaxCacheCapacity());
+        this.cache = new EventsCache<>(configuration.getMaxCacheCapacity());
         this.knownCrawlers = ConcurrentHashMap.newKeySet();
     }
 
@@ -66,8 +66,10 @@ public class HealerServiceImpl extends DataServiceGrpc.DataServiceImplBase {
     public void crawlerConnect(CrawlerInfo request, StreamObserver<DataServiceInfo> responseObserver) {
         try {
 
-            if (LOGGER.isInfoEnabled())
+            if (LOGGER.isInfoEnabled()) {
                 LOGGER.info("crawlerConnect request: {}", toJson(request, true));
+            }
+
 
             knownCrawlers.add(request.getId());
 
@@ -93,8 +95,9 @@ public class HealerServiceImpl extends DataServiceGrpc.DataServiceImplBase {
 
             if (!knownCrawlers.contains(request.getId())) {
 
-                if (LOGGER.isInfoEnabled())
+                if (LOGGER.isWarnEnabled()) {
                     LOGGER.warn("Received request from unknown crawler with id {}. Sending response with HandshakeRequired = true", toJson(request.getId()));
+                }
 
                 responseObserver.onNext(EventResponse.newBuilder()
                         .setStatus(Status.newBuilder().setHandshakeRequired(true))
