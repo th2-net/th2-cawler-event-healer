@@ -20,7 +20,7 @@ import com.exactpro.cradle.CradleStorage;
 import com.exactpro.cradle.testevents.StoredTestEventId;
 import com.exactpro.cradle.testevents.StoredTestEventWrapper;
 import com.exactpro.th2.healer.cache.EventsCache;
-import com.exactpro.th2.healer.cfg.Check2Configuration;
+import com.exactpro.th2.healer.cfg.HealerConfiguration;
 import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.EventStatus;
 import com.exactpro.th2.crawler.dataservice.grpc.CrawlerId;
@@ -50,22 +50,25 @@ public class HealerServiceImpl extends DataServiceGrpc.DataServiceImplBase {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HealerServiceImpl.class);
 
-    private final Check2Configuration configuration;
+    private final HealerConfiguration configuration;
     private final CradleStorage storage;
     private final Map<String, InnerEvent> cache;
     private final ConcurrentHashMap.KeySetView<CrawlerId, Boolean> knownCrawlers;
 
-    public HealerServiceImpl(Check2Configuration configuration, CradleStorage storage) {
+    public HealerServiceImpl(HealerConfiguration configuration, CradleStorage storage) {
         this.configuration = configuration;
         this.storage = Objects.requireNonNull(storage, "Cradle storage cannot be null");
-        this.cache = new EventsCache<>(configuration.getCacheSize());
+        this.cache = new EventsCache<>(configuration.getInitialCacheCapacity(), configuration.getMaxCacheCapacity());
         this.knownCrawlers = ConcurrentHashMap.newKeySet();
     }
 
     @Override
     public void crawlerConnect(CrawlerInfo request, StreamObserver<DataServiceInfo> responseObserver) {
         try {
-            LOGGER.info("crawlerConnect request: {}", request);
+
+            if (LOGGER.isInfoEnabled())
+                LOGGER.info("crawlerConnect request: {}", toJson(request, true));
+
             knownCrawlers.add(request.getId());
 
             DataServiceInfo response = DataServiceInfo.newBuilder()
@@ -89,7 +92,10 @@ public class HealerServiceImpl extends DataServiceGrpc.DataServiceImplBase {
             LOGGER.info("sendEvent request: {}", request);
 
             if (!knownCrawlers.contains(request.getId())) {
-                LOGGER.warn("Received request from unknown crawler with id {}. Sending response with HandshakeRequired = true", toJson(request.getId()));
+
+                if (LOGGER.isInfoEnabled())
+                    LOGGER.warn("Received request from unknown crawler with id {}. Sending response with HandshakeRequired = true", toJson(request.getId()));
+
                 responseObserver.onNext(EventResponse.newBuilder()
                         .setStatus(Status.newBuilder().setHandshakeRequired(true))
                         .build());
@@ -163,6 +169,8 @@ public class HealerServiceImpl extends DataServiceGrpc.DataServiceImplBase {
             }
 
             eventAncestors.add(innerEvent);
+
+            if (!innerEvent.success) break;
 
             parentId = innerEvent.event.getParentId().toString();
         }

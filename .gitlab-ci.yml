@@ -1,5 +1,5 @@
 variables:
-  APP_NAME: "th2-crawler-check2-demo"
+  APP_NAME: "th2-crawler-event-healer"
 
 include:
   - project: "vivarium/th2/pipelines"

@@ -23,13 +23,17 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class EventsCache<K, V> extends LinkedHashMap<K, V> {
-    private final int capacity;
+    private final int maxCapacity;
     private final Lock writeLock;
     private final Lock readLock;
 
-    public EventsCache(int capacity) {
-        super(capacity);
-        this.capacity = capacity;
+    public EventsCache(int initialCapacity, int maxCapacity) {
+        super(initialCapacity);
+
+        if (initialCapacity <= 0 || maxCapacity <= 0)
+            throw new IllegalArgumentException("Capacity of EventsCache cannot be zero or negative");
+
+        this.maxCapacity = maxCapacity;
 
         ReadWriteLock lock = new ReentrantReadWriteLock();
         this.writeLock = lock.writeLock();
@@ -88,6 +92,6 @@ public class EventsCache<K, V> extends LinkedHashMap<K, V> {
 
     @Override
     protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
-        return size() > capacity;
+        return size() > maxCapacity;
     }
 }

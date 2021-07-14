@@ -17,7 +17,7 @@
 package com.exactpro.th2.healer;
 
 import com.exactpro.cradle.CradleStorage;
-import com.exactpro.th2.healer.cfg.Check2Configuration;
+import com.exactpro.th2.healer.cfg.HealerConfiguration;
 import com.exactpro.th2.healer.grpc.HealerServiceImpl;
 import com.exactpro.th2.common.schema.factory.CommonFactory;
 import com.exactpro.th2.common.schema.grpc.router.GrpcRouter;
@@ -38,7 +38,7 @@ public class BoxMain {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(BoxMain.class);
 
-    public static final String NAME = "Check2 demo";
+    public static final String NAME = "crawler-event-healer";
     public static final String VERSION = "0.0.1";
 
     public static void main(String[] args) {
@@ -56,7 +56,7 @@ public class BoxMain {
             GrpcRouter grpcRouter = factory.getGrpcRouter();
             resources.add(grpcRouter);
 
-            Check2Configuration configuration = new Check2Configuration(NAME, VERSION, 1000);
+            HealerConfiguration configuration = factory.getCustomConfiguration(HealerConfiguration.class);
             CradleStorage storage = factory.getCradleManager().getStorage();
 
             HealerServiceImpl handler = new HealerServiceImpl(configuration, storage);
