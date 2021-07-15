@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.exactpro.th2.healer.cfg;
+package com.exactpro.th2.dataservice.healer.cfg;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;

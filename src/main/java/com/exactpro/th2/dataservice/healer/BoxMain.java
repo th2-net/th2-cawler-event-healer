@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-package com.exactpro.th2.healer;
+package com.exactpro.th2.dataservice.healer;
 
 import com.exactpro.cradle.CradleStorage;
-import com.exactpro.th2.healer.cfg.HealerConfiguration;
-import com.exactpro.th2.healer.grpc.HealerServiceImpl;
+import com.exactpro.th2.dataservice.healer.cfg.HealerConfiguration;
+import com.exactpro.th2.dataservice.healer.grpc.HealerServiceImpl;
 import com.exactpro.th2.common.schema.factory.CommonFactory;
 import com.exactpro.th2.common.schema.grpc.router.GrpcRouter;
 import io.grpc.Server;
@@ -37,9 +37,6 @@ import static com.exactpro.th2.common.metrics.CommonMetrics.setReadiness;
 public class BoxMain {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(BoxMain.class);
-
-    public static final String NAME = "crawler-event-healer";
-    public static final String VERSION = "0.0.1";
 
     public static void main(String[] args) {
         Deque<AutoCloseable> resources = new ConcurrentLinkedDeque<>();

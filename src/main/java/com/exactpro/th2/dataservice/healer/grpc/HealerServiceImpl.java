@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package com.exactpro.th2.healer.grpc;
+package com.exactpro.th2.dataservice.healer.grpc;
 
 import com.exactpro.cradle.CradleStorage;
 import com.exactpro.cradle.testevents.StoredTestEventId;
 import com.exactpro.cradle.testevents.StoredTestEventWrapper;
-import com.exactpro.th2.healer.cache.EventsCache;
-import com.exactpro.th2.healer.cfg.HealerConfiguration;
+import com.exactpro.th2.dataservice.healer.cache.EventsCache;
+import com.exactpro.th2.dataservice.healer.cfg.HealerConfiguration;
 import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.EventStatus;
 import com.exactpro.th2.crawler.dataservice.grpc.CrawlerId;
