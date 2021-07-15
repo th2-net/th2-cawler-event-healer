@@ -19,7 +19,7 @@ spec:
   custom-config:
     name: test-event-healer
     version: 1.0.0
-    maxCacheCapacity: 100000
+    maxCacheCapacity: 1000
   pins:
     - name: server
       connection-type: grpc
@@ -46,10 +46,11 @@ spec:
 
 + name - the data service name
 + version - the data service version
-+ maxCacheCapacity - maximum capacity of the cache that stores 
-  events processed by Healer to avoid acquiring them again from Cradle.
-  After reaching maximum capacity, the least recent accessed event 
-  in the cache will be removed, so no overflow happens.
++ maxCacheCapacity - the maximum capacity of the cache that stores 
+  events processed by Healer. Caching events is useful in order to 
+  avoid their repeated retrieval from Cradle.
+  After reaching the maximum capacity, the least recent accessed event 
+  from the cache will be removed, so no overflow occurs.
 
 # Useful links
 
