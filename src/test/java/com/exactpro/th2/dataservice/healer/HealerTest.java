@@ -114,6 +114,7 @@ public class HealerTest {
     public void healedCorrectly() {
         EventID parentId = EventID.newBuilder().setId("parent_event_id").build();
         EventID childId = EventID.newBuilder().setId("child_event_id").build();
+        EventID grandchildId = EventID.newBuilder().setId("grandchild_event_id").build();
 
         EventData parentEvent = EventData.newBuilder()
                 .setEventId(parentId)
@@ -123,6 +124,12 @@ public class HealerTest {
         EventData childEvent = EventData.newBuilder()
                 .setEventId(childId)
                 .setParentEventId(parentId)
+                .setSuccessful(EventStatus.SUCCESS)
+                .build();
+
+        EventData grandchildEvent = EventData.newBuilder()
+                .setEventId(grandchildId)
+                .setParentEventId(childId)
                 .setSuccessful(EventStatus.FAILED)
                 .build();
 
@@ -130,13 +137,14 @@ public class HealerTest {
                 .setId(crawlerInfo.getId())
                 .addEventData(parentEvent)
                 .addEventData(childEvent)
+                .addEventData(grandchildEvent)
                 .build();
 
         healer.crawlerConnect(crawlerInfo, dataServiceResponseObserver);
 
         healer.sendEvent(request, eventResponseObserver);
 
-        //verify(storageMock).updateEventStatus(eq(events.get(1)), eq(false)); //NPE
+        //verify(storageMock).updateEventStatus(eq(events.get(0)), eq(false)); //NPE
         verify(eventResponseObserver).onCompleted();
     }
 
@@ -184,14 +192,28 @@ public class HealerTest {
                 .parentId(new StoredTestEventId("parent_event_id"))
                 .success(true)
                 .type("event_type")
-                .success(false)
                 .build();
 
         StoredTestEvent childEventData = StoredTestEvent.newStoredTestEventSingle(childEventToStore);
         StoredTestEventWrapper childEvent = new StoredTestEventWrapper(childEventData);
 
+        TestEventToStore grandchildEventToStore = TestEventToStore.builder()
+                .startTimestamp(instant.plus(4, ChronoUnit.MINUTES))
+                .endTimestamp(instant.plus(5, ChronoUnit.MINUTES))
+                .name("grandchild_event_name")
+                .content(new byte[]{1, 2, 3})
+                .id(new StoredTestEventId("grandchild_event_id"))
+                .parentId(new StoredTestEventId("child_event_id"))
+                .type("event_type")
+                .success(false)
+                .build();
+
+        StoredTestEvent grandchildEventData = StoredTestEvent.newStoredTestEventSingle(grandchildEventToStore);
+        StoredTestEventWrapper grandchildEvent = new StoredTestEventWrapper(grandchildEventData);
+
         events.add(parentEvent);
         events.add(childEvent);
+        events.add(grandchildEvent);
     }
 
 }
