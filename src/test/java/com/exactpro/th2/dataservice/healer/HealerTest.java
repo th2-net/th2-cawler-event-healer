@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -111,7 +112,7 @@ public class HealerTest {
     }
 
     @Test
-    public void healedCorrectly() {
+    public void healedCorrectly() throws IOException {
         EventID parentId = EventID.newBuilder().setId("parent_event_id").build();
         EventID childId = EventID.newBuilder().setId("child_event_id").build();
         EventID grandchildId = EventID.newBuilder().setId("grandchild_event_id").build();
@@ -144,7 +145,8 @@ public class HealerTest {
 
         healer.sendEvent(request, eventResponseObserver);
 
-        //verify(storageMock).updateEventStatus(eq(events.get(0)), eq(false)); //NPE
+        verify(storageMock).updateEventStatus(events.get(0), false);
+        verify(storageMock).updateEventStatus(events.get(1), false);
         verify(eventResponseObserver).onCompleted();
     }
 
