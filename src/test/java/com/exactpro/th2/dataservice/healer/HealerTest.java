@@ -22,6 +22,7 @@ import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.stub.StreamObserver;
 import io.grpc.testing.GrpcCleanupRule;
 import io.grpc.util.MutableHandlerRegistry;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -66,10 +67,14 @@ public class HealerTest {
 
     private HealerServiceImpl healer;
 
-    @BeforeEach
+    @Before
     public void setUp() throws Exception {
         grpcCleanup.register(InProcessServerBuilder.forName("server")
                 .fallbackHandlerRegistry(serviceRegistry).directExecutor().build().start());
+    }
+
+    @BeforeEach
+    public void prepare() throws Exception {
         healer = new HealerServiceImpl(configuration, storageMock);
 
         when(storageMock.getTestEvent(any(StoredTestEventId.class))).then(invocation -> {
