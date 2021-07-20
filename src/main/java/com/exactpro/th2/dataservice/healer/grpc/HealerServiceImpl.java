@@ -183,10 +183,12 @@ public class HealerServiceImpl extends DataServiceGrpc.DataServiceImplBase {
 
             if (!innerEvent.success) break;
 
-            if (innerEvent.event.getParentId() != null)
-                parentId = innerEvent.event.getParentId().toString();
-            else
+            StoredTestEventId eventId = innerEvent.event.getParentId();
+
+            if (eventId == null)
                 break;
+
+            parentId = eventId.toString();
         }
 
         return eventAncestors;
