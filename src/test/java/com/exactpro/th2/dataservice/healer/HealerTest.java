@@ -33,11 +33,9 @@ import com.exactpro.th2.crawler.dataservice.grpc.Status;
 import com.exactpro.th2.dataprovider.grpc.EventData;
 import com.exactpro.th2.dataservice.healer.cfg.HealerConfiguration;
 import com.exactpro.th2.dataservice.healer.grpc.HealerServiceImpl;
-import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.stub.StreamObserver;
 import io.grpc.testing.GrpcCleanupRule;
 import io.grpc.util.MutableHandlerRegistry;
-import org.junit.Before;
 import org.junit.Rule;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -81,12 +79,6 @@ public class HealerTest {
             = (StreamObserver<EventResponse>) mock(StreamObserver.class);
 
     private HealerServiceImpl healer;
-
-    @Before
-    public void setUp() throws Exception {
-        grpcCleanup.register(InProcessServerBuilder.forName("server")
-                .fallbackHandlerRegistry(serviceRegistry).directExecutor().build().start());
-    }
 
     @BeforeEach
     public void prepare() throws Exception {
