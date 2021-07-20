@@ -35,7 +35,6 @@ import com.exactpro.th2.dataservice.healer.cfg.HealerConfiguration;
 import com.exactpro.th2.dataservice.healer.grpc.HealerServiceImpl;
 import io.grpc.stub.StreamObserver;
 import io.grpc.testing.GrpcCleanupRule;
-import io.grpc.util.MutableHandlerRegistry;
 import org.junit.Rule;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -63,7 +62,6 @@ public class HealerTest {
     @Rule
     public final GrpcCleanupRule grpcCleanup = new GrpcCleanupRule();
 
-    private final MutableHandlerRegistry serviceRegistry = new MutableHandlerRegistry();
     private final HealerConfiguration configuration = new HealerConfiguration("test", "1", 100);
     private final CrawlerInfo crawlerInfo = CrawlerInfo.newBuilder().setId(CrawlerId.newBuilder().setName("testCrawler")).build();
     private final CradleStorage storageMock = mock(CradleStorage.class);
