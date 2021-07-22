@@ -52,6 +52,11 @@ spec:
   After reaching the maximum capacity, the least recent accessed event 
   from the cache will be removed, so no overflow occurs.
 
+See th2-crawler in **Useful links** section to see the goal of *name* and *version* 
+parameters.
+
 # Useful links
 
-+ https://github.com/th2-net/th2-crawler-event-healer
++ th2-common - https://github.com/th2-net/th2-common-j
+
++ th2-crawler - https://github.com/th2-net/th2-crawler
