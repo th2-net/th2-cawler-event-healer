@@ -1,0 +1,94 @@
+plugins {
+    id 'com.palantir.docker' version '0.25.0'
+    id 'java'
+    id 'java-library'
+    id 'application'
+}
+
+ext {
+    sharedDir           = file("${project.rootDir}/shared")
+}
+
+group 'com.exactpro.th2'
+version release_version
+
+sourceCompatibility = JavaVersion.VERSION_11
+targetCompatibility = JavaVersion.VERSION_11
+
+repositories {
+    maven {
+        name 'MavenLocal'
+        url sharedDir
+    }
+    mavenLocal()
+    mavenCentral()
+    maven {
+        name 'Sonatype_snapshots'
+        url 'https://s01.oss.sonatype.org/content/repositories/snapshots/'
+    }
+    maven {
+        name 'Sonatype_releases'
+        url 'https://s01.oss.sonatype.org/content/repositories/releases/'
+    }
+
+    configurations.all {
+        resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
+        resolutionStrategy.cacheDynamicVersionsFor 0, 'seconds'
+    }
+}
+
+jar {
+    manifest {
+        attributes(
+                'Created-By':               "${System.getProperty('java.version')} (${System.getProperty('java.vendor')})",
+                'Specification-Title':      '',
+                'Specification-Vendor':     'Exactpro Systems LLC',
+                'Implementation-Title':     project.archivesBaseName,
+                'Implementation-Vendor':    'Exactpro Systems LLC',
+                'Implementation-Vendor-Id': 'com.exactpro',
+                'Implementation-Version':   project.version
+        )
+    }
+}
+
+dependencies {
+    api platform('com.exactpro.th2:bom:3.0.0')
+
+    implementation 'com.exactpro.th2:common:3.16.2'
+    api "com.exactpro.th2:grpc-crawler-data-service:0.0.1"
+
+    implementation "com.exactpro.th2:cradle-cassandra:2.14.0"
+
+    implementation "org.slf4j:slf4j-log4j12"
+    implementation "org.slf4j:slf4j-api"
+    implementation 'junit:junit:4.13.1'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+
+    testImplementation group: 'io.grpc', name: 'grpc-testing', version: '1.38.0'
+
+    testImplementation group: 'org.mockito', name: 'mockito-core', version: '3.11.2'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+application {
+    mainClassName 'com.exactpro.th2.healer.BoxMain'
+}
+
+applicationName = 'service'
+
+distTar {
+    archiveName "${applicationName}.tar"
+}
+
+dockerPrepare {
+    dependsOn distTar
+}
+
+docker {
+    copySpec.from(tarTree("$buildDir/distributions/${applicationName}.tar"))
+}
