@@ -158,7 +158,6 @@ public class HealerServiceImpl extends DataServiceGrpc.DataServiceImplBase {
                         LOGGER.info("Event {} healed", ancestorEvent.getId());
                     }
                 }
-
             }
         }
     }

@@ -73,7 +73,7 @@ public class BoxMain {
 
             setReadiness(true);
 
-            LOGGER.info("Check2 started");
+            LOGGER.info("Healer started");
 
             awaitShutdown(lock, condition);
         } catch (InterruptedException e) {
