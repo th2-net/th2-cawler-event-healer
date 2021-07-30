@@ -204,5 +204,4 @@ public class HealerServiceImpl extends DataServiceGrpc.DataServiceImplBase {
 
         private void markFailed() { this.success = false; }
     }
-
 }

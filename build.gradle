@@ -54,7 +54,7 @@ jar {
 dependencies {
     api platform('com.exactpro.th2:bom:3.0.0')
 
-    implementation 'com.exactpro.th2:common:3.16.2'
+    implementation 'com.exactpro.th2:common:3.18.2'
     implementation "com.exactpro.th2:grpc-crawler-data-service:0.0.1"
 
     implementation "com.exactpro.th2:cradle-cassandra:2.14.0"
@@ -66,7 +66,7 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
 
-    testImplementation group: 'io.grpc', name: 'grpc-testing', version: '1.38.0'
+    testImplementation group: 'io.grpc', name: 'grpc-testing', version: '1.32.1'
 
     testImplementation group: 'org.mockito', name: 'mockito-core', version: '3.11.2'
 }
