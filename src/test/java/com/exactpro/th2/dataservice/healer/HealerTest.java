@@ -22,6 +22,7 @@ import com.exactpro.cradle.testevents.StoredTestEventId;
 import com.exactpro.cradle.testevents.StoredTestEventWrapper;
 import com.exactpro.cradle.testevents.TestEventToStore;
 import com.exactpro.cradle.utils.CradleStorageException;
+import com.exactpro.th2.common.event.EventUtils;
 import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.EventStatus;
 import com.exactpro.th2.crawler.dataservice.grpc.CrawlerId;
@@ -49,6 +50,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -73,7 +75,7 @@ public class HealerTest {
             = (StreamObserver<DataServiceInfo>) mock(StreamObserver.class);
 
     @SuppressWarnings("unchecked")
-    private final StreamObserver<EventResponse> eventResponseObserver
+    private final StreamObserver<EventResponse> eventResponseObserverMock
             = (StreamObserver<EventResponse>) mock(StreamObserver.class);
 
     private HealerServiceImpl healer;
@@ -115,10 +117,10 @@ public class HealerTest {
 
         healer.crawlerConnect(crawlerInfo, dataServiceResponseObserver);
 
-        healer.sendEvent(request, eventResponseObserver);
+        healer.sendEvent(request, eventResponseObserverMock);
 
-        verify(eventResponseObserver).onNext(eq(EventResponse.newBuilder().setId(EventID.newBuilder().setId("event_id2").build()).build()));
-        verify(eventResponseObserver).onCompleted();
+        verify(eventResponseObserverMock).onNext(eq(EventResponse.newBuilder().setId(EventID.newBuilder().setId("event_id2").build()).build()));
+        verify(eventResponseObserverMock).onCompleted();
     }
 
     @Test
@@ -153,11 +155,11 @@ public class HealerTest {
 
         healer.crawlerConnect(crawlerInfo, dataServiceResponseObserver);
 
-        healer.sendEvent(request, eventResponseObserver);
+        healer.sendEvent(request, eventResponseObserverMock);
 
         verify(storageMock).updateEventStatus(events.get(0), false);
         verify(storageMock).updateEventStatus(events.get(1), false);
-        verify(eventResponseObserver).onCompleted();
+        verify(eventResponseObserverMock).onCompleted();
     }
 
     @Test
@@ -166,16 +168,32 @@ public class HealerTest {
                 EventDataRequest.newBuilder()
                         .setId(crawlerInfo.getId())
                         .addEventData(EventData.getDefaultInstance())
-                        .build(), eventResponseObserver
+                        .build(), eventResponseObserverMock
         );
 
         EventResponse response = EventResponse.newBuilder()
                 .setStatus(Status.newBuilder().setHandshakeRequired(true))
                 .build();
 
-        verify(eventResponseObserver).onNext(eq(response));
-        verify(eventResponseObserver).onCompleted();
-        verifyNoMoreInteractions(eventResponseObserver);
+        verify(eventResponseObserverMock).onNext(eq(response));
+        verify(eventResponseObserverMock).onCompleted();
+        verifyNoMoreInteractions(eventResponseObserverMock);
+    }
+
+    @Test
+    public void callsOnErrorOnExceptionThrown() {
+        EventData eventData = EventData.newBuilder().setEventId(EventUtils.toEventID("event_id")).build();
+        EventDataRequest request = EventDataRequest.newBuilder().setId(crawlerInfo.getId()).addEventData(eventData).build();
+
+        doThrow(IllegalStateException.class).when(eventResponseObserverMock).onNext(any(EventResponse.class));
+
+        healer.crawlerConnect(crawlerInfo, dataServiceResponseObserver);
+
+        healer.sendEvent(request, eventResponseObserverMock);
+
+        verify(eventResponseObserverMock).onNext(eq(EventResponse.newBuilder().setId(eventData.getEventId()).build()));
+        verify(eventResponseObserverMock).onError(any(IllegalStateException.class));
+        verifyNoMoreInteractions(eventResponseObserverMock);
     }
 
     private void createEvents() throws CradleStorageException {
