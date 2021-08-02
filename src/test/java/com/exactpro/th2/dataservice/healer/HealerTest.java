@@ -30,7 +30,6 @@ import com.exactpro.th2.crawler.dataservice.grpc.DataServiceGrpc;
 import com.exactpro.th2.crawler.dataservice.grpc.DataServiceInfo;
 import com.exactpro.th2.crawler.dataservice.grpc.EventDataRequest;
 import com.exactpro.th2.crawler.dataservice.grpc.EventResponse;
-import com.exactpro.th2.crawler.dataservice.grpc.Status;
 import com.exactpro.th2.dataprovider.grpc.EventData;
 import com.exactpro.th2.dataservice.healer.cfg.HealerConfiguration;
 import com.exactpro.th2.dataservice.healer.grpc.HealerServiceImpl;
@@ -38,8 +37,8 @@ import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -51,6 +50,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -74,17 +74,19 @@ public class HealerTest {
     private static ManagedChannel channel;
     private static DataServiceGrpc.DataServiceBlockingStub blockingStub;
 
-    private static HealerServiceImpl healer;
-
-    @BeforeAll
-    public static void prepare() throws IOException, CradleStorageException {
-        healer = new HealerServiceImpl(CONFIGURATION, STORAGE_MOCK);
+    @BeforeEach
+    public void prepare() throws IOException, CradleStorageException {
         int port = 8081;
-        server = ServerBuilder.forPort(port).addService(healer).build().start();
+
+        server = ServerBuilder.forPort(port)
+                .addService(new HealerServiceImpl(CONFIGURATION, STORAGE_MOCK))
+                .build()
+                .start();
         channel = ManagedChannelBuilder.forAddress("localhost", port)
                 .usePlaintext()
                 .directExecutor()
                 .build();
+
         blockingStub = DataServiceGrpc.newBlockingStub(channel);
 
         when(STORAGE_MOCK.getTestEvent(any(StoredTestEventId.class))).then(invocation -> {
@@ -101,10 +103,11 @@ public class HealerTest {
         createEvents();
     }
 
-    @AfterAll
-    public static void shutdown() {
+    @AfterEach
+    public void shutdown() {
         server.shutdown();
         channel.shutdown();
+        events.clear();
     }
 
     @Test
@@ -168,7 +171,17 @@ public class HealerTest {
         verify(STORAGE_MOCK).updateEventStatus(events.get(1), false);
     }
 
-    private static void createEvents() throws CradleStorageException {
+    @Test
+    public void crawlerUnknown() {
+        EventResponse response = blockingStub.sendEvent(EventDataRequest.newBuilder()
+                .setId(CRAWLER_INFO.getId())
+                .addEventData(EventData.getDefaultInstance())
+                .build());
+
+        assertTrue(response.getStatus().getHandshakeRequired());
+    }
+
+    private void createEvents() throws CradleStorageException {
         Instant instant = Instant.now();
 
         TestEventToStore parentEventToStore = TestEventToStore.builder()
