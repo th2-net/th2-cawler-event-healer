@@ -24,15 +24,15 @@ import com.exactpro.cradle.testevents.TestEventToStore;
 import com.exactpro.cradle.utils.CradleStorageException;
 import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.EventStatus;
-import com.exactpro.th2.crawler.dataservice.grpc.CrawlerId;
-import com.exactpro.th2.crawler.dataservice.grpc.CrawlerInfo;
-import com.exactpro.th2.crawler.dataservice.grpc.DataServiceGrpc;
-import com.exactpro.th2.crawler.dataservice.grpc.DataServiceInfo;
-import com.exactpro.th2.crawler.dataservice.grpc.EventDataRequest;
-import com.exactpro.th2.crawler.dataservice.grpc.EventResponse;
+import com.exactpro.th2.crawler.dataprocessor.grpc.CrawlerId;
+import com.exactpro.th2.crawler.dataprocessor.grpc.CrawlerInfo;
+import com.exactpro.th2.crawler.dataprocessor.grpc.DataProcessorGrpc;
+import com.exactpro.th2.crawler.dataprocessor.grpc.DataProcessorInfo;
+import com.exactpro.th2.crawler.dataprocessor.grpc.EventDataRequest;
+import com.exactpro.th2.crawler.dataprocessor.grpc.EventResponse;
 import com.exactpro.th2.dataprovider.grpc.EventData;
 import com.exactpro.th2.dataservice.healer.cfg.HealerConfiguration;
-import com.exactpro.th2.dataservice.healer.grpc.HealerServiceImpl;
+import com.exactpro.th2.dataservice.healer.grpc.HealerImpl;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Server;
@@ -72,14 +72,14 @@ public class HealerTest {
 
     private static Server server;
     private static ManagedChannel channel;
-    private static DataServiceGrpc.DataServiceBlockingStub blockingStub;
+    private static DataProcessorGrpc.DataProcessorBlockingStub blockingStub;
 
     @BeforeEach
     public void prepare() throws IOException, CradleStorageException {
         int port = 8081;
 
         server = ServerBuilder.forPort(port)
-                .addService(new HealerServiceImpl(CONFIGURATION, STORAGE_MOCK))
+                .addService(new HealerImpl(CONFIGURATION, STORAGE_MOCK))
                 .build()
                 .start();
         channel = ManagedChannelBuilder.forAddress("localhost", port)
@@ -87,7 +87,7 @@ public class HealerTest {
                 .directExecutor()
                 .build();
 
-        blockingStub = DataServiceGrpc.newBlockingStub(channel);
+        blockingStub = DataProcessorGrpc.newBlockingStub(channel);
 
         when(STORAGE_MOCK.getTestEvent(any(StoredTestEventId.class))).then(invocation -> {
             StoredTestEventId id = invocation.getArgument(0);
@@ -112,7 +112,7 @@ public class HealerTest {
 
     @Test
     public void handshakeHandling() {
-        DataServiceInfo dataServiceInfo = blockingStub.crawlerConnect(CRAWLER_INFO);
+        DataProcessorInfo dataServiceInfo = blockingStub.crawlerConnect(CRAWLER_INFO);
         assertEquals(HEALER_NAME, dataServiceInfo.getName());
         assertEquals(HEALER_VERSION, dataServiceInfo.getVersion());
     }

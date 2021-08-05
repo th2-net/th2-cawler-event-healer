@@ -18,7 +18,7 @@ package com.exactpro.th2.dataservice.healer;
 
 import com.exactpro.cradle.CradleStorage;
 import com.exactpro.th2.dataservice.healer.cfg.HealerConfiguration;
-import com.exactpro.th2.dataservice.healer.grpc.HealerServiceImpl;
+import com.exactpro.th2.dataservice.healer.grpc.HealerImpl;
 import com.exactpro.th2.common.schema.factory.CommonFactory;
 import com.exactpro.th2.common.schema.grpc.router.GrpcRouter;
 import io.grpc.Server;
@@ -56,7 +56,7 @@ public class BoxMain {
             HealerConfiguration configuration = factory.getCustomConfiguration(HealerConfiguration.class);
             CradleStorage storage = factory.getCradleManager().getStorage();
 
-            HealerServiceImpl handler = new HealerServiceImpl(configuration, storage);
+            HealerImpl handler = new HealerImpl(configuration, storage);
 
             Server server = grpcRouter.startServer(handler).start();
             resources.add(() -> {
