@@ -26,11 +26,10 @@ spec:
   extended-settings:
     service:
       enabled: true
-      type: NodePort
+      type: ClusterIP
       endpoints:
         - name: 'grpc'
           targetPort: 8080
-          nodePort: <free port>
     envVariables:
       JAVA_TOOL_OPTIONS: '-XX:+ExitOnOutOfMemoryError -XX:+UseContainerSupport -XX:MaxRAMPercentage=85'
   resources:

@@ -37,6 +37,8 @@ import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.inprocess.InProcessChannelBuilder;
+import io.grpc.inprocess.InProcessServerBuilder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -76,13 +78,13 @@ public class HealerTest {
 
     @BeforeEach
     public void prepare() throws IOException, CradleStorageException {
-        int port = 8081;
+        String serverName = InProcessServerBuilder.generateName();
 
-        server = ServerBuilder.forPort(port)
+        server = InProcessServerBuilder.forName(serverName)
                 .addService(new HealerImpl(CONFIGURATION, STORAGE_MOCK))
                 .build()
                 .start();
-        channel = ManagedChannelBuilder.forAddress("localhost", port)
+        channel = InProcessChannelBuilder.forName(serverName)
                 .usePlaintext()
                 .directExecutor()
                 .build();
