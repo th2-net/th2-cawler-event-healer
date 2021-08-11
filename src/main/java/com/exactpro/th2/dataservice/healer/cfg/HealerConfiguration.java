@@ -22,8 +22,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Objects;
 
 public class HealerConfiguration {
-
-
     private final String name;
     private final String version;
     private final int maxCacheCapacity;

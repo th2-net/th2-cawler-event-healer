@@ -23,13 +23,13 @@ import com.exactpro.th2.dataservice.healer.cache.EventsCache;
 import com.exactpro.th2.dataservice.healer.cfg.HealerConfiguration;
 import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.EventStatus;
-import com.exactpro.th2.crawler.dataservice.grpc.CrawlerId;
-import com.exactpro.th2.crawler.dataservice.grpc.CrawlerInfo;
-import com.exactpro.th2.crawler.dataservice.grpc.DataServiceGrpc;
-import com.exactpro.th2.crawler.dataservice.grpc.DataServiceInfo;
-import com.exactpro.th2.crawler.dataservice.grpc.EventDataRequest;
-import com.exactpro.th2.crawler.dataservice.grpc.EventResponse;
-import com.exactpro.th2.crawler.dataservice.grpc.Status;
+import com.exactpro.th2.crawler.dataprocessor.grpc.CrawlerId;
+import com.exactpro.th2.crawler.dataprocessor.grpc.CrawlerInfo;
+import com.exactpro.th2.crawler.dataprocessor.grpc.DataProcessorGrpc;
+import com.exactpro.th2.crawler.dataprocessor.grpc.DataProcessorInfo;
+import com.exactpro.th2.crawler.dataprocessor.grpc.EventDataRequest;
+import com.exactpro.th2.crawler.dataprocessor.grpc.EventResponse;
+import com.exactpro.th2.crawler.dataprocessor.grpc.Status;
 import com.exactpro.th2.dataprovider.grpc.EventData;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
@@ -48,23 +48,23 @@ import java.util.concurrent.ConcurrentHashMap;
 import static com.exactpro.th2.common.message.MessageUtils.toJson;
 
 
-public class HealerServiceImpl extends DataServiceGrpc.DataServiceImplBase {
+public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(HealerServiceImpl.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(HealerImpl.class);
 
     private final HealerConfiguration configuration;
     private final CradleStorage storage;
     private final Map<String, InnerEvent> cache;
     private final Set<CrawlerId> knownCrawlers = ConcurrentHashMap.newKeySet();
 
-    public HealerServiceImpl(HealerConfiguration configuration, CradleStorage storage) {
+    public HealerImpl(HealerConfiguration configuration, CradleStorage storage) {
         this.configuration = Objects.requireNonNull(configuration, "Configuration cannot be null");
         this.storage = Objects.requireNonNull(storage, "Cradle storage cannot be null");
         this.cache = new EventsCache<>(configuration.getMaxCacheCapacity());
     }
 
     @Override
-    public void crawlerConnect(CrawlerInfo request, StreamObserver<DataServiceInfo> responseObserver) {
+    public void crawlerConnect(CrawlerInfo request, StreamObserver<DataProcessorInfo> responseObserver) {
         try {
 
             if (LOGGER.isInfoEnabled()) {
@@ -74,7 +74,7 @@ public class HealerServiceImpl extends DataServiceGrpc.DataServiceImplBase {
 
             knownCrawlers.add(request.getId());
 
-            DataServiceInfo response = DataServiceInfo.newBuilder()
+            DataProcessorInfo response = DataProcessorInfo.newBuilder()
                     .setName(configuration.getName())
                     .setVersion(configuration.getVersion())
                     .build();
@@ -158,7 +158,6 @@ public class HealerServiceImpl extends DataServiceGrpc.DataServiceImplBase {
                         LOGGER.info("Event {} healed", ancestorEvent.getId());
                     }
                 }
-
             }
         }
     }
@@ -205,5 +204,4 @@ public class HealerServiceImpl extends DataServiceGrpc.DataServiceImplBase {
 
         private void markFailed() { this.success = false; }
     }
-
 }

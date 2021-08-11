@@ -1,11 +1,11 @@
-# Healer data service (0.0.1)
+# Healer data processor (0.0.2)
 
-Healer data service fixes wrong status of events. When a child event has a "failed" status and its parent
+Healer data processor fixes wrong status of events. When a child event has a "failed" status and its parent
 has a "success" status, the status of the parent is wrong. Healer finds the parent event and makes its status "failed", too.
 
 ## Configuration
 
-There is an example of full configuration for the data service
+There is an example of full configuration for the data processor
 
 ```yaml
 apiVersion: th2.exactpro.com/v1
@@ -26,11 +26,10 @@ spec:
   extended-settings:
     service:
       enabled: true
-      type: NodePort
+      type: ClusterIP
       endpoints:
         - name: 'grpc'
           targetPort: 8080
-          nodePort: <free port>
     envVariables:
       JAVA_TOOL_OPTIONS: '-XX:+ExitOnOutOfMemoryError -XX:+UseContainerSupport -XX:MaxRAMPercentage=85'
   resources:
@@ -44,8 +43,8 @@ spec:
 
 ### Parameters description
 
-+ name - the data service name
-+ version - the data service version
++ name - the data processor name
++ version - the data processor version
 + maxCacheCapacity - the maximum capacity of the cache that stores 
   events processed by Healer. Caching events is useful in order to 
   avoid their repeated retrieval from Cradle.

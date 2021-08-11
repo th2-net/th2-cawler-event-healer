@@ -24,22 +24,22 @@ import com.exactpro.cradle.testevents.TestEventToStore;
 import com.exactpro.cradle.utils.CradleStorageException;
 import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.EventStatus;
-import com.exactpro.th2.crawler.dataservice.grpc.CrawlerId;
-import com.exactpro.th2.crawler.dataservice.grpc.CrawlerInfo;
-import com.exactpro.th2.crawler.dataservice.grpc.DataServiceInfo;
-import com.exactpro.th2.crawler.dataservice.grpc.EventDataRequest;
-import com.exactpro.th2.crawler.dataservice.grpc.EventResponse;
-import com.exactpro.th2.crawler.dataservice.grpc.Status;
+import com.exactpro.th2.crawler.dataprocessor.grpc.CrawlerId;
+import com.exactpro.th2.crawler.dataprocessor.grpc.CrawlerInfo;
+import com.exactpro.th2.crawler.dataprocessor.grpc.DataProcessorGrpc;
+import com.exactpro.th2.crawler.dataprocessor.grpc.DataProcessorInfo;
+import com.exactpro.th2.crawler.dataprocessor.grpc.EventDataRequest;
+import com.exactpro.th2.crawler.dataprocessor.grpc.EventResponse;
 import com.exactpro.th2.dataprovider.grpc.EventData;
 import com.exactpro.th2.dataservice.healer.cfg.HealerConfiguration;
-import com.exactpro.th2.dataservice.healer.grpc.HealerServiceImpl;
-import io.grpc.stub.StreamObserver;
-import io.grpc.testing.GrpcCleanupRule;
-import org.junit.Rule;
+import com.exactpro.th2.dataservice.healer.grpc.HealerImpl;
+import io.grpc.ManagedChannel;
+import io.grpc.Server;
+import io.grpc.inprocess.InProcessChannelBuilder;
+import io.grpc.inprocess.InProcessServerBuilder;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -47,42 +47,47 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-@RunWith(JUnit4.class)
 public class HealerTest {
-    /**
-     * This rule manages automatic graceful shutdown for the registered server at the end of test.
-     */
-    @Rule
-    public final GrpcCleanupRule grpcCleanup = new GrpcCleanupRule();
 
-    private final HealerConfiguration configuration = new HealerConfiguration("test", "1", 100);
-    private final CrawlerInfo crawlerInfo = CrawlerInfo.newBuilder().setId(CrawlerId.newBuilder().setName("testCrawler")).build();
-    private final CradleStorage storageMock = mock(CradleStorage.class);
-    private final List<StoredTestEventWrapper> events = new ArrayList<>();
+    private static final String HEALER_NAME = "healer";
+    private static final String HEALER_VERSION = "1";
+    private static final String CRAWLER_NAME = "crawler";
+    private static final String PARENT_EVENT_ID = "parent_event_id";
+    private static final String CHILD_EVENT_ID = "child_event_id";
+    private static final String GRANDCHILD_EVENT_ID = "grandchild_event_id";
+    private static final HealerConfiguration CONFIGURATION = new HealerConfiguration(HEALER_NAME, HEALER_VERSION, 100);
+    private static final CrawlerId CRAWLER_ID = CrawlerId.newBuilder().setName(CRAWLER_NAME).build();
+    private static final CrawlerInfo CRAWLER_INFO = CrawlerInfo.newBuilder().setId(CRAWLER_ID).build();
+    private static final CradleStorage STORAGE_MOCK = mock(CradleStorage.class);
+    private static final List<StoredTestEventWrapper> events = new ArrayList<>();
 
-
-    @SuppressWarnings("unchecked")
-    private final StreamObserver<DataServiceInfo> dataServiceResponseObserver
-            = (StreamObserver<DataServiceInfo>) mock(StreamObserver.class);
-
-    @SuppressWarnings("unchecked")
-    private final StreamObserver<EventResponse> eventResponseObserver
-            = (StreamObserver<EventResponse>) mock(StreamObserver.class);
-
-    private HealerServiceImpl healer;
+    private static Server server;
+    private static ManagedChannel channel;
+    private static DataProcessorGrpc.DataProcessorBlockingStub blockingStub;
 
     @BeforeEach
-    public void prepare() throws Exception {
-        healer = new HealerServiceImpl(configuration, storageMock);
+    public void prepare() throws IOException, CradleStorageException {
+        String serverName = InProcessServerBuilder.generateName();
 
-        when(storageMock.getTestEvent(any(StoredTestEventId.class))).then(invocation -> {
+        server = InProcessServerBuilder.forName(serverName)
+                .addService(new HealerImpl(CONFIGURATION, STORAGE_MOCK))
+                .build()
+                .start();
+        channel = InProcessChannelBuilder.forName(serverName)
+                .usePlaintext()
+                .directExecutor()
+                .build();
+
+        blockingStub = DataProcessorGrpc.newBlockingStub(channel);
+
+        when(STORAGE_MOCK.getTestEvent(any(StoredTestEventId.class))).then(invocation -> {
             StoredTestEventId id = invocation.getArgument(0);
 
             for (StoredTestEventWrapper storedEvent : events) {
@@ -96,36 +101,42 @@ public class HealerTest {
         createEvents();
     }
 
+    @AfterEach
+    public void shutdown() {
+        server.shutdown();
+        channel.shutdown();
+        events.clear();
+    }
+
     @Test
     public void handshakeHandling() {
-        healer.crawlerConnect(crawlerInfo, dataServiceResponseObserver);
-
-        verify(dataServiceResponseObserver).onNext(eq(DataServiceInfo.newBuilder().setName("test").setVersion("1").build()));
-        verify(dataServiceResponseObserver).onCompleted();
-        verifyNoMoreInteractions(dataServiceResponseObserver);
+        DataProcessorInfo dataServiceInfo = blockingStub.crawlerConnect(CRAWLER_INFO);
+        assertEquals(HEALER_NAME, dataServiceInfo.getName());
+        assertEquals(HEALER_VERSION, dataServiceInfo.getVersion());
     }
 
     @Test
     public void correctEventIdInResponse() {
+        EventID eventId1 = EventID.newBuilder().setId("event_id1").build();
+        EventID eventId2 = EventID.newBuilder().setId("event_id2").build();
+
         EventDataRequest request = EventDataRequest.newBuilder()
-                .setId(crawlerInfo.getId())
-                .addEventData(EventData.newBuilder().setEventId(EventID.newBuilder().setId("event_id1")).build())
-                .addEventData(EventData.newBuilder().setEventId(EventID.newBuilder().setId("event_id2")).build())
+                .setId(CRAWLER_INFO.getId())
+                .addEventData(EventData.newBuilder().setEventId(eventId1).build())
+                .addEventData(EventData.newBuilder().setEventId(eventId2).build())
                 .build();
 
-        healer.crawlerConnect(crawlerInfo, dataServiceResponseObserver);
+        blockingStub.crawlerConnect(CRAWLER_INFO);
+        EventResponse response = blockingStub.sendEvent(request);
 
-        healer.sendEvent(request, eventResponseObserver);
-
-        verify(eventResponseObserver).onNext(eq(EventResponse.newBuilder().setId(EventID.newBuilder().setId("event_id2").build()).build()));
-        verify(eventResponseObserver).onCompleted();
+        assertEquals(eventId2.getId(), response.getId().getId());
     }
 
     @Test
     public void healedCorrectly() throws IOException {
-        EventID parentId = EventID.newBuilder().setId("parent_event_id").build();
-        EventID childId = EventID.newBuilder().setId("child_event_id").build();
-        EventID grandchildId = EventID.newBuilder().setId("grandchild_event_id").build();
+        EventID parentId = EventID.newBuilder().setId(PARENT_EVENT_ID).build();
+        EventID childId = EventID.newBuilder().setId(CHILD_EVENT_ID).build();
+        EventID grandchildId = EventID.newBuilder().setId(GRANDCHILD_EVENT_ID).build();
 
         EventData parentEvent = EventData.newBuilder()
                 .setEventId(parentId)
@@ -145,37 +156,27 @@ public class HealerTest {
                 .build();
 
         EventDataRequest request = EventDataRequest.newBuilder()
-                .setId(crawlerInfo.getId())
+                .setId(CRAWLER_INFO.getId())
                 .addEventData(parentEvent)
                 .addEventData(childEvent)
                 .addEventData(grandchildEvent)
                 .build();
 
-        healer.crawlerConnect(crawlerInfo, dataServiceResponseObserver);
+        blockingStub.crawlerConnect(CRAWLER_INFO);
+        blockingStub.sendEvent(request);
 
-        healer.sendEvent(request, eventResponseObserver);
-
-        verify(storageMock).updateEventStatus(events.get(0), false);
-        verify(storageMock).updateEventStatus(events.get(1), false);
-        verify(eventResponseObserver).onCompleted();
+        verify(STORAGE_MOCK).updateEventStatus(events.get(0), false);
+        verify(STORAGE_MOCK).updateEventStatus(events.get(1), false);
     }
 
     @Test
     public void crawlerUnknown() {
-        healer.sendEvent(
-                EventDataRequest.newBuilder()
-                        .setId(crawlerInfo.getId())
-                        .addEventData(EventData.getDefaultInstance())
-                        .build(), eventResponseObserver
-        );
+        EventResponse response = blockingStub.sendEvent(EventDataRequest.newBuilder()
+                .setId(CRAWLER_INFO.getId())
+                .addEventData(EventData.getDefaultInstance())
+                .build());
 
-        EventResponse response = EventResponse.newBuilder()
-                .setStatus(Status.newBuilder().setHandshakeRequired(true))
-                .build();
-
-        verify(eventResponseObserver).onNext(eq(response));
-        verify(eventResponseObserver).onCompleted();
-        verifyNoMoreInteractions(eventResponseObserver);
+        assertTrue(response.getStatus().getHandshakeRequired());
     }
 
     private void createEvents() throws CradleStorageException {
@@ -186,7 +187,7 @@ public class HealerTest {
                 .endTimestamp(instant.plus(1, ChronoUnit.MINUTES))
                 .name("parent_event_name")
                 .content(new byte[]{1, 2, 3})
-                .id(new StoredTestEventId("parent_event_id"))
+                .id(new StoredTestEventId(PARENT_EVENT_ID))
                 .success(true)
                 .type("event_type")
                 .success(true)
@@ -201,7 +202,7 @@ public class HealerTest {
                 .name("child_event_name")
                 .content(new byte[]{1, 2, 3})
                 .id(new StoredTestEventId("child_event_id"))
-                .parentId(new StoredTestEventId("parent_event_id"))
+                .parentId(new StoredTestEventId(PARENT_EVENT_ID))
                 .success(true)
                 .type("event_type")
                 .build();
@@ -214,8 +215,8 @@ public class HealerTest {
                 .endTimestamp(instant.plus(5, ChronoUnit.MINUTES))
                 .name("grandchild_event_name")
                 .content(new byte[]{1, 2, 3})
-                .id(new StoredTestEventId("grandchild_event_id"))
-                .parentId(new StoredTestEventId("child_event_id"))
+                .id(new StoredTestEventId(GRANDCHILD_EVENT_ID))
+                .parentId(new StoredTestEventId(CHILD_EVENT_ID))
                 .type("event_type")
                 .success(false)
                 .build();
@@ -227,5 +228,4 @@ public class HealerTest {
         events.add(childEvent);
         events.add(grandchildEvent);
     }
-
 }
