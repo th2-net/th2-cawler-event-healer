@@ -37,13 +37,9 @@ import io.grpc.ManagedChannel;
 import io.grpc.Server;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
-import io.grpc.testing.GrpcCleanupRule;
-import org.junit.Rule;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -58,10 +54,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@RunWith(JUnit4.class)
 public class HealerTest {
-    @Rule
-    public final GrpcCleanupRule grpcCleanup = new GrpcCleanupRule();
 
     private static final String HEALER_NAME = "healer";
     private static final String HEALER_VERSION = "1";
@@ -87,10 +80,10 @@ public class HealerTest {
                 .addService(new HealerImpl(CONFIGURATION, STORAGE_MOCK))
                 .build()
                 .start();
-        channel = grpcCleanup.register(InProcessChannelBuilder.forName(serverName)
+        channel = InProcessChannelBuilder.forName(serverName)
                 .usePlaintext()
                 .directExecutor()
-                .build());
+                .build();
 
         blockingStub = DataProcessorGrpc.newBlockingStub(channel);
 
