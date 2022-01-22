@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.exactpro.th2.dataservice.healer.grpc;
+package com.exactpro.th2.crawler.processor.healer.grpc;
 
 import static com.exactpro.th2.common.message.MessageUtils.toJson;
 import static java.util.Objects.requireNonNull;
@@ -42,9 +42,9 @@ import com.exactpro.th2.crawler.dataprocessor.grpc.DataProcessorInfo;
 import com.exactpro.th2.crawler.dataprocessor.grpc.EventDataRequest;
 import com.exactpro.th2.crawler.dataprocessor.grpc.EventResponse;
 import com.exactpro.th2.crawler.dataprocessor.grpc.Status;
+import com.exactpro.th2.crawler.processor.healer.cfg.HealerConfiguration;
 import com.exactpro.th2.dataprovider.grpc.EventData;
-import com.exactpro.th2.dataservice.healer.cache.EventsCache;
-import com.exactpro.th2.dataservice.healer.cfg.HealerConfiguration;
+import com.exactpro.th2.crawler.processor.healer.cache.EventsCache;
 
 import io.grpc.stub.StreamObserver;
 

@@ -77,7 +77,7 @@ test {
 }
 
 application {
-    mainClassName 'com.exactpro.th2.healer.BoxMain'
+    mainClassName 'com.exactpro.th2.crawler.processor.healer.BoxMain'
 }
 
 applicationName = 'service'

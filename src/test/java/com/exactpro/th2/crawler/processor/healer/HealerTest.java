@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.exactpro.th2.dataservice.healer;
+package com.exactpro.th2.crawler.processor.healer;
 
 import com.exactpro.cradle.CradleStorage;
 import com.exactpro.cradle.testevents.StoredTestEvent;
@@ -30,9 +30,10 @@ import com.exactpro.th2.crawler.dataprocessor.grpc.DataProcessorGrpc;
 import com.exactpro.th2.crawler.dataprocessor.grpc.DataProcessorInfo;
 import com.exactpro.th2.crawler.dataprocessor.grpc.EventDataRequest;
 import com.exactpro.th2.crawler.dataprocessor.grpc.EventResponse;
+import com.exactpro.th2.crawler.processor.healer.cfg.HealerConfiguration;
+import com.exactpro.th2.crawler.processor.healer.grpc.HealerImpl;
 import com.exactpro.th2.dataprovider.grpc.EventData;
-import com.exactpro.th2.dataservice.healer.cfg.HealerConfiguration;
-import com.exactpro.th2.dataservice.healer.grpc.HealerImpl;
+
 import io.grpc.ManagedChannel;
 import io.grpc.Server;
 import io.grpc.inprocess.InProcessChannelBuilder;
@@ -110,9 +111,9 @@ public class HealerTest {
 
     @Test
     public void handshakeHandling() {
-        DataProcessorInfo dataServiceInfo = blockingStub.crawlerConnect(CRAWLER_INFO);
-        assertEquals(HEALER_NAME, dataServiceInfo.getName());
-        assertEquals(HEALER_VERSION, dataServiceInfo.getVersion());
+        DataProcessorInfo dataProcessorInfo = blockingStub.crawlerConnect(CRAWLER_INFO);
+        assertEquals(HEALER_NAME, dataProcessorInfo.getName());
+        assertEquals(HEALER_VERSION, dataProcessorInfo.getVersion());
     }
 
     @Test
