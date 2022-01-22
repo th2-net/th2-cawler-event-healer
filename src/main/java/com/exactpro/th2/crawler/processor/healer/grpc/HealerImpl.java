@@ -41,10 +41,12 @@ import com.exactpro.th2.crawler.dataprocessor.grpc.DataProcessorGrpc;
 import com.exactpro.th2.crawler.dataprocessor.grpc.DataProcessorInfo;
 import com.exactpro.th2.crawler.dataprocessor.grpc.EventDataRequest;
 import com.exactpro.th2.crawler.dataprocessor.grpc.EventResponse;
+import com.exactpro.th2.crawler.dataprocessor.grpc.IntervalInfo;
 import com.exactpro.th2.crawler.dataprocessor.grpc.Status;
 import com.exactpro.th2.crawler.processor.healer.cfg.HealerConfiguration;
 import com.exactpro.th2.dataprovider.grpc.EventData;
 import com.exactpro.th2.crawler.processor.healer.cache.EventsCache;
+import com.google.protobuf.Empty;
 
 import io.grpc.stub.StreamObserver;
 
@@ -88,6 +90,15 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
             responseObserver.onError(e);
             LOGGER.error("crawlerConnect error: " + e.getMessage(), e);
         }
+    }
+
+    @Override
+    public void intervalStart(IntervalInfo request, StreamObserver<Empty> responseObserver) {
+        if (LOGGER.isInfoEnabled()) {
+            LOGGER.info("intervalStart request: {}", toJson(request));
+        }
+        responseObserver.onNext(Empty.getDefaultInstance());
+        responseObserver.onCompleted();
     }
 
     @Override
