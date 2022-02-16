@@ -136,11 +136,10 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
 
             EventResponse.Builder builder = EventResponse.newBuilder();
 
-            if (lastEventId != null && !lastEventId.getId().equals("")) {
+            if (lastEventId != null && from!=null & to!=null) {
                 builder.setId(lastEventId);
-            }
-            else if (LOGGER.isInfoEnabled()) {
-                LOGGER.info("parent not found");
+                from=null;
+                to=null;
             }
 
             EventResponse response = builder.build();
@@ -162,7 +161,6 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
         for (EventData event : events) {
             if (event.getSuccessful() == EventStatus.FAILED && event.hasParentEventId()) {
                 eventAncestors = getAncestors(event);
-
                 for (InnerEvent ancestor : eventAncestors) {
                     StoredTestEventWrapper ancestorEvent = ancestor.event;
 
@@ -176,12 +174,12 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
             else if (!event.hasParentEventId()){
                 if (from == null && to == null) {
                     from = Instant.now();
-                    to = from.plus(configuration.getWaitLag(), configuration.getWaitLagOffsetUnit());
+                    to = from.plus(configuration.getToLag(), configuration.getToLagOffsetUnit());
                     LOGGER.info("Waiting for parentEventId in the interval from {} to {} for the name {} and version {}", from, to, configuration.getName(), configuration.getVersion());
                 }
                 Instant now = Instant.ofEpochSecond(event.getEndTimestamp().getSeconds());
-                if (now.isBefore(to)){
-                    LOGGER.info("Did  not arrive parentEventId in the range from {} to {} for the name {} and version {}", from, to, configuration.getName(), configuration.getVersion());
+                if (to.isBefore(now)){
+                    LOGGER.info("Did not arrive parentEventId in the range from {} to {} for the name {} and version {}", from, to, configuration.getName(), configuration.getVersion());
                     from = null;
                     to = null;
                     break;
@@ -205,7 +203,7 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
                 innerEvent = new InnerEvent(parent, parent.isSuccess());
                 cache.put(parentId, innerEvent);
             }
-            
+
             eventAncestors.add(innerEvent);
 
             if (!innerEvent.success) break;

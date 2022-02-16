@@ -26,15 +26,15 @@ public class HealerConfiguration {
     private final String name;
     private final String version;
     private final int maxCacheCapacity;
-    private final int waitLag;
-    private final ChronoUnit waitLagOffsetUnit;
+    private final int toLag;
+    private final ChronoUnit toLagOffsetUnit;
 
     @JsonCreator
     public HealerConfiguration(@JsonProperty("name") String name,
                                @JsonProperty("version") String version,
                                @JsonProperty("maxCacheCapacity") int maxCacheCapacity,
-                               @JsonProperty("waitLag") int waitLag,
-                               @JsonProperty("waitLagOffsetUnit") ChronoUnit waitLagOffsetUnit) {
+                               @JsonProperty("toLag") int toLag,
+                               @JsonProperty("toLagOffsetUnit") ChronoUnit toLagOffsetUnit) {
         this.name = Objects.requireNonNull(name, "Name is required");
         this.version = Objects.requireNonNull(version, "Version is required");
 
@@ -51,8 +51,8 @@ public class HealerConfiguration {
 
         this.maxCacheCapacity = maxCacheCapacity;
 
-        this.waitLag = waitLag;
-        this.waitLagOffsetUnit = waitLagOffsetUnit;
+        this.toLag = toLag;
+        this.toLagOffsetUnit = toLagOffsetUnit;
     }
 
     public String getName() { return name; }
@@ -61,7 +61,7 @@ public class HealerConfiguration {
 
     public int getMaxCacheCapacity() { return maxCacheCapacity; }
 
-    public int getWaitLag() { return waitLag; }
+    public int getToLag() { return toLag; }
 
-    public ChronoUnit getWaitLagOffsetUnit() { return waitLagOffsetUnit; }
+    public ChronoUnit getToLagOffsetUnit() { return toLagOffsetUnit; }
 }
