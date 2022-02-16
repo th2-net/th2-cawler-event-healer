@@ -200,6 +200,11 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
             } else {
                 StoredTestEventWrapper parent = storage.getTestEvent(new StoredTestEventId(parentId));
 
+                if (parent == null){
+                    LOGGER.info("Failed to extract test event data {}", parentId);
+                    break;
+                }
+
                 innerEvent = new InnerEvent(parent, parent.isSuccess());
                 cache.put(parentId, innerEvent);
             }
