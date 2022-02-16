@@ -34,6 +34,7 @@ import com.exactpro.th2.crawler.processor.healer.cfg.HealerConfiguration;
 import com.exactpro.th2.crawler.processor.healer.grpc.HealerImpl;
 import com.exactpro.th2.dataprovider.grpc.EventData;
 
+import com.google.protobuf.Timestamp;
 import io.grpc.ManagedChannel;
 import io.grpc.Server;
 import io.grpc.inprocess.InProcessChannelBuilder;
@@ -48,6 +49,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.exactpro.th2.common.message.MessageUtils.toTimestamp;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -63,7 +65,7 @@ public class HealerTest {
     private static final String PARENT_EVENT_ID = "parent_event_id";
     private static final String CHILD_EVENT_ID = "child_event_id";
     private static final String GRANDCHILD_EVENT_ID = "grandchild_event_id";
-    private static final HealerConfiguration CONFIGURATION = new HealerConfiguration(HEALER_NAME, HEALER_VERSION, 100);
+    private static final HealerConfiguration CONFIGURATION = new HealerConfiguration(HEALER_NAME, HEALER_VERSION, 100, 3, ChronoUnit.SECONDS);
     private static final CrawlerId CRAWLER_ID = CrawlerId.newBuilder().setName(CRAWLER_NAME).build();
     private static final CrawlerInfo CRAWLER_INFO = CrawlerInfo.newBuilder().setId(CRAWLER_ID).build();
     private static final CradleStorage STORAGE_MOCK = mock(CradleStorage.class);
@@ -136,21 +138,32 @@ public class HealerTest {
     @Test
     public void healedCorrectly() throws IOException {
         EventID parentId = EventID.newBuilder().setId(PARENT_EVENT_ID).build();
-        EventID childId = EventID.newBuilder().setId(CHILD_EVENT_ID).build();
+        EventID childId = EventID.newBuilder().build();
         EventID grandchildId = EventID.newBuilder().setId(GRANDCHILD_EVENT_ID).build();
 
+        Instant instant = Instant.now();
+        Timestamp timestamp = toTimestamp(instant);
+
         EventData parentEvent = EventData.newBuilder()
+                .setStartTimestamp(timestamp)
+                .setEndTimestamp(timestamp)
                 .setEventId(parentId)
                 .setSuccessful(EventStatus.SUCCESS)
                 .build();
 
+        timestamp = toTimestamp(instant.plus(1, ChronoUnit.SECONDS));
         EventData childEvent = EventData.newBuilder()
+                .setStartTimestamp(timestamp)
+                .setEndTimestamp(timestamp)
                 .setEventId(childId)
                 .setParentEventId(parentId)
                 .setSuccessful(EventStatus.SUCCESS)
                 .build();
 
+        timestamp = toTimestamp(instant.plus(3, ChronoUnit.SECONDS));
         EventData grandchildEvent = EventData.newBuilder()
+                .setStartTimestamp(timestamp)
+                .setEndTimestamp(timestamp)
                 .setEventId(grandchildId)
                 .setParentEventId(childId)
                 .setSuccessful(EventStatus.FAILED)
@@ -166,8 +179,43 @@ public class HealerTest {
         blockingStub.crawlerConnect(CRAWLER_INFO);
         blockingStub.sendEvent(request);
 
-        verify(STORAGE_MOCK).updateEventStatus(events.get(0), false);
-        verify(STORAGE_MOCK).updateEventStatus(events.get(1), false);
+        instant = Instant.now();
+        timestamp = toTimestamp(instant);
+
+        parentEvent = EventData.newBuilder()
+                .setStartTimestamp(timestamp)
+                .setEndTimestamp(timestamp)
+                .setEventId(parentId)
+                .setSuccessful(EventStatus.SUCCESS)
+                .build();
+
+        timestamp = toTimestamp(instant.plus(1, ChronoUnit.SECONDS));
+        childEvent = EventData.newBuilder()
+                .setStartTimestamp(timestamp)
+                .setEndTimestamp(timestamp)
+                .setEventId(childId)
+                .setParentEventId(parentId)
+                .setSuccessful(EventStatus.SUCCESS)
+                .build();
+
+        timestamp = toTimestamp(instant.plus(2, ChronoUnit.SECONDS));
+        grandchildEvent = EventData.newBuilder()
+                .setStartTimestamp(timestamp)
+                .setEndTimestamp(timestamp)
+                .setEventId(grandchildId)
+                .setParentEventId(childId)
+                .setSuccessful(EventStatus.FAILED)
+                .build();
+
+        request = EventDataRequest.newBuilder()
+                .setId(CRAWLER_INFO.getId())
+                .addEventData(parentEvent)
+                .addEventData(childEvent)
+                .addEventData(grandchildEvent)
+                .build();
+
+        blockingStub.sendEvent(request);
+
     }
 
     @Test

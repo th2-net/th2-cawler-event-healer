@@ -20,6 +20,7 @@ import static com.exactpro.th2.common.message.MessageUtils.toJson;
 import static java.util.Objects.requireNonNull;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -58,6 +59,8 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
     private final CradleStorage storage;
     private final Map<String, InnerEvent> cache;
     private final Set<CrawlerId> knownCrawlers = ConcurrentHashMap.newKeySet();
+    private Instant from;
+    private Instant to;
 
     public HealerImpl(HealerConfiguration configuration, CradleStorage storage) {
         this.configuration = requireNonNull(configuration, "Configuration cannot be null");
@@ -133,8 +136,11 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
 
             EventResponse.Builder builder = EventResponse.newBuilder();
 
-            if (lastEventId != null) {
+            if (lastEventId != null && !lastEventId.getId().equals("")) {
                 builder.setId(lastEventId);
+            }
+            else if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("parent not found");
             }
 
             EventResponse response = builder.build();
@@ -153,10 +159,8 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
 
     private void heal(Collection<EventData> events) throws IOException {
         List<InnerEvent> eventAncestors;
-
         for (EventData event : events) {
             if (event.getSuccessful() == EventStatus.FAILED && event.hasParentEventId()) {
-
                 eventAncestors = getAncestors(event);
 
                 for (InnerEvent ancestor : eventAncestors) {
@@ -167,6 +171,20 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
                         ancestor.markFailed();
                         LOGGER.info("Event {} healed", ancestorEvent.getId());
                     }
+                }
+            }
+            else if (!event.hasParentEventId()){
+                if (from == null && to == null) {
+                    from = Instant.now();
+                    to = from.plus(configuration.getWaitLag(), configuration.getWaitLagOffsetUnit());
+                    LOGGER.info("Waiting for parentEventId in the interval from {} to {} for the name {} and version {}", from, to, configuration.getName(), configuration.getVersion());
+                }
+                Instant now = Instant.ofEpochSecond(event.getEndTimestamp().getSeconds());
+                if (now.isBefore(to)){
+                    LOGGER.info("Did  not arrive parentEventId in the range from {} to {} for the name {} and version {}", from, to, configuration.getName(), configuration.getVersion());
+                    from = null;
+                    to = null;
+                    break;
                 }
             }
         }
@@ -187,7 +205,7 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
                 innerEvent = new InnerEvent(parent, parent.isSuccess());
                 cache.put(parentId, innerEvent);
             }
-
+            
             eventAncestors.add(innerEvent);
 
             if (!innerEvent.success) break;

@@ -19,17 +19,22 @@ package com.exactpro.th2.crawler.processor.healer.cfg;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 
 public class HealerConfiguration {
     private final String name;
     private final String version;
     private final int maxCacheCapacity;
+    private final int waitLag;
+    private final ChronoUnit waitLagOffsetUnit;
 
     @JsonCreator
     public HealerConfiguration(@JsonProperty("name") String name,
                                @JsonProperty("version") String version,
-                               @JsonProperty("maxCacheCapacity") int maxCacheCapacity) {
+                               @JsonProperty("maxCacheCapacity") int maxCacheCapacity,
+                               @JsonProperty("waitLag") int waitLag,
+                               @JsonProperty("waitLagOffsetUnit") ChronoUnit waitLagOffsetUnit) {
         this.name = Objects.requireNonNull(name, "Name is required");
         this.version = Objects.requireNonNull(version, "Version is required");
 
@@ -45,6 +50,9 @@ public class HealerConfiguration {
             throw new IllegalArgumentException("Size of cache cannot be negative or zero");
 
         this.maxCacheCapacity = maxCacheCapacity;
+
+        this.waitLag = waitLag;
+        this.waitLagOffsetUnit = waitLagOffsetUnit;
     }
 
     public String getName() { return name; }
@@ -52,4 +60,8 @@ public class HealerConfiguration {
     public String getVersion() { return version; }
 
     public int getMaxCacheCapacity() { return maxCacheCapacity; }
+
+    public int getWaitLag() { return waitLag; }
+
+    public ChronoUnit getWaitLagOffsetUnit() { return waitLagOffsetUnit; }
 }
