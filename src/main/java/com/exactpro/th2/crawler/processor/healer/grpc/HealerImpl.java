@@ -20,6 +20,7 @@ import static com.exactpro.th2.common.message.MessageUtils.toJson;
 import static java.util.Objects.requireNonNull;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -55,9 +56,6 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
     private final CradleStorage storage;
     private final Map<String, InnerEvent> cache;
     private final Set<CrawlerId> knownCrawlers = ConcurrentHashMap.newKeySet();
-    private Instant from;
-    private Instant to;
-    private Set<String> notFoundParent;
 
     public HealerImpl(HealerConfiguration configuration, CradleStorage storage) {
         this.configuration = requireNonNull(configuration, "Configuration cannot be null");
@@ -123,11 +121,10 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
 
             int eventsCount = request.getEventDataCount();
 
-            notFoundParent = new HashSet<>();
+            Set<String> notFoundParent = new HashSet<>();
 
-            heal(request.getEventDataList());
-            from = null;
-            to = null;
+
+            heal(request.getEventDataList(), notFoundParent);
 
             EventID lastEventId = null;
 
@@ -155,11 +152,14 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
         }
     }
 
-    private void heal(Collection<EventData> events) throws IOException {
+    private void heal(Collection<EventData> events, Set<String> notFoundParent) throws IOException {
         List<InnerEvent> eventAncestors;
         for (EventData event : events) {
             if (event.getSuccessful() == EventStatus.FAILED && event.hasParentEventId()) {
-                eventAncestors = getAncestors(event);
+                eventAncestors = getAncestors(event, notFoundParent);
+                if (eventAncestors.isEmpty()){
+                    notFoundParent.add(event.getParentEventId().getId());
+                }
                 for (InnerEvent ancestor : eventAncestors) {
                     StoredTestEventWrapper ancestorEvent = ancestor.event;
 
@@ -170,44 +170,44 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
                     }
                 }
             }
-            else if (!event.hasParentEventId()){
-                if (from == null && to == null) {
-                    from = Instant.now();
-                    to = from.plus(configuration.getToLag(), configuration.getToLagOffsetUnit());
-                    LOGGER.info("Waiting for parentEventId in the interval from {} to {} for the name {} and version {}", from, to, configuration.getName(), configuration.getVersion());
-                }
-                Instant now = Instant.now();
-                if (to.isBefore(now)){
-                    LOGGER.info("Did not arrive parentEventId in the range from {} to {} for the name {} and version {}", from, to, configuration.getName(), configuration.getVersion());
-                    break;
-                }
-            }
         }
     }
 
-    private List<InnerEvent> getAncestors(EventData event) throws IOException {
+    private List<InnerEvent> getAncestors(EventData event, Set<String> notFoundParent) throws IOException {
         List<InnerEvent> eventAncestors = new ArrayList<>();
         String parentId = event.getParentEventId().getId();
 
         while (parentId != null) {
             InnerEvent innerEvent;
 
-            for(Object object : notFoundParent) {
-                if (parentId.equals(object)) {
-                    LOGGER.info("Parent element {} none", parentId);
-                    return eventAncestors;
-                }
-            }
-
             if (cache.containsKey(parentId)) {
                 innerEvent = cache.get(parentId);
             } else {
+                if (notFoundParent.contains(parentId)) {
+                    LOGGER.info("Parent element {} none", parentId);
+                    return eventAncestors;
+                }
+
                 StoredTestEventWrapper parent = storage.getTestEvent(new StoredTestEventId(parentId));
 
-                if (parent == null){
-                    notFoundParent.add(parentId);
-                    LOGGER.info("Failed to extract test event data {}", parentId);
-                    break;
+                if (parent == null) {
+                    Instant from = Instant.now();
+                    Instant to = from.plus(configuration.getWaitParent(), configuration.getWaitParentOffsetUnit());
+                    long sleepTime = Duration.between(from, to).abs().toMillis();
+                    LOGGER.info("Waiting for parentEventId in the interval from {} to {}. Wait for {}", from, to, Duration.ofMillis(sleepTime));
+
+                    try {
+                        Thread.sleep(sleepTime);
+                    } catch (InterruptedException e) {
+                        LOGGER.error("getAncestors error: " + e.getMessage());
+                        e.printStackTrace();
+                    }
+
+                    parent = storage.getTestEvent(new StoredTestEventId(parentId));
+                    if (parent == null) {
+                        LOGGER.info("Failed to extract test event data {}", parentId);
+                        return eventAncestors;
+                    }
                 }
 
                 innerEvent = new InnerEvent(parent, parent.isSuccess());
