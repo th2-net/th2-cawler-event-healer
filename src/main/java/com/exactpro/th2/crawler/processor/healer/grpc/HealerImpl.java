@@ -21,11 +21,7 @@ import static java.util.Objects.requireNonNull;
 
 import java.io.IOException;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
@@ -61,6 +57,7 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
     private final Set<CrawlerId> knownCrawlers = ConcurrentHashMap.newKeySet();
     private Instant from;
     private Instant to;
+    private Set<String> notFoundParent;
 
     public HealerImpl(HealerConfiguration configuration, CradleStorage storage) {
         this.configuration = requireNonNull(configuration, "Configuration cannot be null");
@@ -126,7 +123,11 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
 
             int eventsCount = request.getEventDataCount();
 
+            notFoundParent = new HashSet<>();
+
             heal(request.getEventDataList());
+            from = null;
+            to = null;
 
             EventID lastEventId = null;
 
@@ -136,10 +137,8 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
 
             EventResponse.Builder builder = EventResponse.newBuilder();
 
-            if (lastEventId != null && from!=null & to!=null) {
+            if (lastEventId != null) {
                 builder.setId(lastEventId);
-                from=null;
-                to=null;
             }
 
             EventResponse response = builder.build();
@@ -177,11 +176,9 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
                     to = from.plus(configuration.getToLag(), configuration.getToLagOffsetUnit());
                     LOGGER.info("Waiting for parentEventId in the interval from {} to {} for the name {} and version {}", from, to, configuration.getName(), configuration.getVersion());
                 }
-                Instant now = Instant.ofEpochSecond(event.getEndTimestamp().getSeconds());
+                Instant now = Instant.now();
                 if (to.isBefore(now)){
                     LOGGER.info("Did not arrive parentEventId in the range from {} to {} for the name {} and version {}", from, to, configuration.getName(), configuration.getVersion());
-                    from = null;
-                    to = null;
                     break;
                 }
             }
@@ -195,12 +192,20 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
         while (parentId != null) {
             InnerEvent innerEvent;
 
+            for(Object object : notFoundParent) {
+                if (parentId.equals(object)) {
+                    LOGGER.info("Parent element {} none", parentId);
+                    return eventAncestors;
+                }
+            }
+
             if (cache.containsKey(parentId)) {
                 innerEvent = cache.get(parentId);
             } else {
                 StoredTestEventWrapper parent = storage.getTestEvent(new StoredTestEventId(parentId));
 
                 if (parent == null){
+                    notFoundParent.add(parentId);
                     LOGGER.info("Failed to extract test event data {}", parentId);
                     break;
                 }
