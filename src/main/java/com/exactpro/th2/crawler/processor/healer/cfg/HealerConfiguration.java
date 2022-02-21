@@ -28,13 +28,17 @@ public class HealerConfiguration {
     private final int maxCacheCapacity;
     private final int waitParent;
     private final ChronoUnit waitParentOffsetUnit;
+    private final int waitingStep;
+    private final ChronoUnit waitingStepOffsetUnit;
 
     @JsonCreator
     public HealerConfiguration(@JsonProperty("name") String name,
                                @JsonProperty("version") String version,
                                @JsonProperty("maxCacheCapacity") int maxCacheCapacity,
                                @JsonProperty("waitParent") int waitParent,
-                               @JsonProperty("waitParentOffsetUnit") ChronoUnit waitParentOffsetUnit) {
+                               @JsonProperty("waitParentOffsetUnit") ChronoUnit waitParentOffsetUnit,
+                               @JsonProperty("waitingStep") int waitingStep,
+                               @JsonProperty("waitingStepOffsetUnit") ChronoUnit waitingStepOffsetUnit) {
         this.name = Objects.requireNonNull(name, "Name is required");
         this.version = Objects.requireNonNull(version, "Version is required");
 
@@ -53,6 +57,9 @@ public class HealerConfiguration {
 
         this.waitParent = waitParent;
         this.waitParentOffsetUnit = waitParentOffsetUnit;
+
+        this.waitingStep = waitingStep;
+        this.waitingStepOffsetUnit = waitingStepOffsetUnit;
     }
 
     public String getName() { return name; }
@@ -64,4 +71,8 @@ public class HealerConfiguration {
     public int getWaitParent() { return waitParent; }
 
     public ChronoUnit getWaitParentOffsetUnit() { return waitParentOffsetUnit; }
+
+    public int getWaitingStep() { return waitingStep; }
+
+    public ChronoUnit getWaitingStepOffsetUnit() { return waitingStepOffsetUnit; }
 }
