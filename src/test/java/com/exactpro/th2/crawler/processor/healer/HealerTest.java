@@ -34,7 +34,6 @@ import com.exactpro.th2.crawler.processor.healer.cfg.HealerConfiguration;
 import com.exactpro.th2.crawler.processor.healer.grpc.HealerImpl;
 import com.exactpro.th2.dataprovider.grpc.EventData;
 
-import com.google.protobuf.Timestamp;
 import io.grpc.ManagedChannel;
 import io.grpc.Server;
 import io.grpc.inprocess.InProcessChannelBuilder;
@@ -47,7 +46,6 @@ import java.io.IOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 
 import static com.exactpro.th2.common.message.MessageUtils.toTimestamp;
@@ -66,7 +64,7 @@ public class HealerTest {
     private static final String PARENT_EVENT_ID = "parent_event_id";
     private static final String CHILD_EVENT_ID = "child_event_id";
     private static final String GRANDCHILD_EVENT_ID = "grandchild_event_id";
-    private static final HealerConfiguration CONFIGURATION = new HealerConfiguration(HEALER_NAME, HEALER_VERSION, 100, 1, ChronoUnit.SECONDS);
+    private static final HealerConfiguration CONFIGURATION = new HealerConfiguration(HEALER_NAME, HEALER_VERSION, 100, 10, ChronoUnit.SECONDS, 3, ChronoUnit.SECONDS);
     private static final CrawlerId CRAWLER_ID = CrawlerId.newBuilder().setName(CRAWLER_NAME).build();
     private static final CrawlerInfo CRAWLER_INFO = CrawlerInfo.newBuilder().setId(CRAWLER_ID).build();
     private static final CradleStorage STORAGE_MOCK = mock(CradleStorage.class);
@@ -142,112 +140,47 @@ public class HealerTest {
         EventID childId = EventID.newBuilder().setId(CHILD_EVENT_ID).build();
         EventID grandchildId = EventID.newBuilder().setId(GRANDCHILD_EVENT_ID).build();
 
-        Instant instant = Instant.now();
-        Timestamp timestamp = toTimestamp(instant);
+        EventDataRequest.Builder request = EventDataRequest.newBuilder()
+                .setId(CRAWLER_INFO.getId());
 
-        EventData parentEvent = EventData.newBuilder()
-                .setStartTimestamp(timestamp)
-                .setEndTimestamp(timestamp)
-                .setEventId(parentId)
-                .setSuccessful(EventStatus.SUCCESS)
-                .build();
-
-        timestamp = toTimestamp(instant.plus(1, ChronoUnit.SECONDS));
-        EventData childEvent = EventData.newBuilder()
-                .setStartTimestamp(timestamp)
-                .setEndTimestamp(timestamp)
-                .setEventId(childId)
-                .setParentEventId(parentId)
-                .setSuccessful(EventStatus.SUCCESS)
-                .build();
-
-        timestamp = toTimestamp(instant.plus(2, ChronoUnit.SECONDS));
-        EventData grandchildEvent = EventData.newBuilder()
-                .setStartTimestamp(timestamp)
-                .setEndTimestamp(timestamp)
-                .setEventId(grandchildId)
-                .setParentEventId(childId)
-                .setSuccessful(EventStatus.FAILED)
-                .build();
-
-        EventDataRequest request = EventDataRequest.newBuilder()
-                .setId(CRAWLER_INFO.getId())
-                .addEventData(parentEvent)
-                .addEventData(childEvent)
-                .addEventData(grandchildEvent)
-                .build();
+        request.addEventData(buildEvent(parentId, null, EventStatus.SUCCESS));
+        request.addEventData(buildEvent(childId, parentId, EventStatus.SUCCESS));
+        request.addEventData(buildEvent(grandchildId, childId, EventStatus.FAILED));
 
         blockingStub.crawlerConnect(CRAWLER_INFO);
-        blockingStub.sendEvent(request);
+        blockingStub.sendEvent(request.build());
         verify(STORAGE_MOCK).updateEventStatus(events.get(0), false);
         verify(STORAGE_MOCK).updateEventStatus(events.get(1), false);
     }
 
     @Test
-    public void notHealed() throws IOException {
+    public void notHealed() {
         EventID childId = EventID.newBuilder().setId(CHILD_EVENT_ID).build();
         EventID childId1 = EventID.newBuilder().setId(CHILD_EVENT_ID+"_1").build();
         EventID childId2 = EventID.newBuilder().setId(CHILD_EVENT_ID+"_2").build();
-        EventID childId3 = EventID.newBuilder().setId(CHILD_EVENT_ID+"_3").build();
 
-        Instant instant = Instant.now();
-        Timestamp timestamp = toTimestamp(instant.plus(3, ChronoUnit.SECONDS));
+        EventDataRequest.Builder request = EventDataRequest.newBuilder()
+                .setId(CRAWLER_INFO.getId());
 
-        EventData childEvent = EventData.newBuilder()
-                .setStartTimestamp(timestamp)
-                .setEndTimestamp(timestamp)
-                .setEventId(childId)
-                .setSuccessful(EventStatus.SUCCESS)
-                .build();
-
-        timestamp = toTimestamp(instant.plus(7, ChronoUnit.SECONDS));
-        EventData childEvent1 = EventData.newBuilder()
-                .setStartTimestamp(timestamp)
-                .setEndTimestamp(timestamp)
-                .setEventId(childId1)
-                .setSuccessful(EventStatus.SUCCESS)
-                .build();
-
-        timestamp = toTimestamp(instant.plus(9, ChronoUnit.SECONDS));
-        EventData childEvent2 = EventData.newBuilder()
-                .setStartTimestamp(timestamp)
-                .setEndTimestamp(timestamp)
-                .setEventId(childId2)
-                .setSuccessful(EventStatus.SUCCESS)
-                .build();
-
-        timestamp = toTimestamp(instant.plus(13, ChronoUnit.SECONDS));
-        EventData childEvent3 = EventData.newBuilder()
-                .setStartTimestamp(timestamp)
-                .setEndTimestamp(timestamp)
-                .setEventId(childId3)
-                .setParentEventId(childId2)
-                .setSuccessful(EventStatus.FAILED)
-                .build();
-
-        timestamp = toTimestamp(instant.plus(15, ChronoUnit.SECONDS));
-        EventData childEvent4= EventData.newBuilder()
-                .setStartTimestamp(timestamp)
-                .setEndTimestamp(timestamp)
-                .setEventId(childId3)
-                .setParentEventId(childId2)
-                .setSuccessful(EventStatus.FAILED)
-                .build();
-
-        EventDataRequest request = EventDataRequest.newBuilder()
-                .setId(CRAWLER_INFO.getId())
-                .addEventData(childEvent)
-                .addEventData(childEvent1)
-                .addEventData(childEvent2)
-                .addEventData(childEvent3)
-                .addEventData(childEvent4)
-                .build();
+        request.addEventData(buildEvent(childId, null, EventStatus.SUCCESS));
+        request.addEventData(buildEvent(childId1, null, EventStatus.SUCCESS));
+        request.addEventData(buildEvent(childId2, null, EventStatus.FAILED));
 
         blockingStub.crawlerConnect(CRAWLER_INFO);
-        EventResponse response = blockingStub.sendEvent(request);
+        EventResponse response = blockingStub.sendEvent(request.build());
 
-        EventResponse expended = EventResponse.newBuilder().setId(childId3).build();
+        EventResponse expended = EventResponse.newBuilder().setId(childId2).build();
         assertEquals(expended, response);
+    }
+
+    public EventData buildEvent(EventID eventID, EventID parentEventId, EventStatus status) {
+        EventData.Builder eventData = EventData.newBuilder()
+                .setStartTimestamp(toTimestamp(Instant.now()))
+                .setEndTimestamp(toTimestamp(Instant.now()))
+                .setEventId(eventID)
+                .setSuccessful(status);
+        if (parentEventId != null) eventData.setParentEventId(parentEventId);
+        return eventData.build();
     }
 
     @Test
