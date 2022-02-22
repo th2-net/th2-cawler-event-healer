@@ -57,7 +57,7 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
     private final Set<CrawlerId> knownCrawlers = ConcurrentHashMap.newKeySet();
     private final long waitParent;
     private final long waitingStep;
-    Set<String> notFoundParent;
+    private Set<String> notFoundParent;
 
     public HealerImpl(HealerConfiguration configuration, CradleStorage storage) {
         this.configuration = requireNonNull(configuration, "Configuration cannot be null");
