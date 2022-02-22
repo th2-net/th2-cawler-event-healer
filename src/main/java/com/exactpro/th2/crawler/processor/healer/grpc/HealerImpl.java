@@ -55,11 +55,16 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
     private final CradleStorage storage;
     private final Map<String, InnerEvent> cache;
     private final Set<CrawlerId> knownCrawlers = ConcurrentHashMap.newKeySet();
+    private final long waitParent;
+    private final long waitingStep;
+    Set<String> notFoundParent;
 
     public HealerImpl(HealerConfiguration configuration, CradleStorage storage) {
         this.configuration = requireNonNull(configuration, "Configuration cannot be null");
         this.storage = requireNonNull(storage, "Cradle storage cannot be null");
         this.cache = new EventsCache<>(configuration.getMaxCacheCapacity());
+        this.waitParent = Duration.of(configuration.getWaitParent(), configuration.getWaitParentOffsetUnit()).toMillis();
+        this.waitingStep = Duration.of(configuration.getWaitingStep(), configuration.getWaitingStepOffsetUnit()).toMillis();
     }
 
     @Override
@@ -149,14 +154,12 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
     }
 
     private void heal(Collection<EventData> events) throws IOException, InterruptedException {
-        Set<String> notFoundParent = new HashSet<>();
+        notFoundParent = new HashSet<>();
         List<InnerEvent> eventAncestors;
         for (EventData event : events) {
             if (event.getSuccessful() == EventStatus.FAILED && event.hasParentEventId()) {
-                eventAncestors = getAncestors(event, notFoundParent);
-                if (eventAncestors.isEmpty()){
-                    notFoundParent.add(event.getParentEventId().getId());
-                }
+                eventAncestors = getAncestors(event);
+
                 for (InnerEvent ancestor : eventAncestors) {
                     StoredTestEventWrapper ancestorEvent = ancestor.event;
 
@@ -170,7 +173,7 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
         }
     }
 
-    private List<InnerEvent> getAncestors(EventData event, Set<String> notFoundParent) throws IOException, InterruptedException {
+    private List<InnerEvent> getAncestors(EventData event) throws IOException, InterruptedException {
         List<InnerEvent> eventAncestors = new ArrayList<>();
         String parentId = event.getParentEventId().getId();
 
@@ -183,29 +186,28 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
                 StoredTestEventWrapper parent = storage.getTestEvent(new StoredTestEventId(parentId));
                 if (parent == null) {
                     if (notFoundParent.contains(parentId)) {
-                        LOGGER.info("Parent element {} none", parentId);
+                        LOGGER.debug("Parent element {} none", parentId);
                         return eventAncestors;
                     }
 
                     long from = System.currentTimeMillis();
-                    long to = from + Duration.of(configuration.getWaitParent(), configuration.getWaitParentOffsetUnit()).toMillis();
-                    long sleepTime = Duration.of(configuration.getWaitingStep(), configuration.getWaitingStepOffsetUnit()).toMillis();
-                    LOGGER.info("Waiting for parentEventId in an interval of size {} with a step {}.", Duration.ofMillis(to - from), Duration.ofMillis(sleepTime));
+                    long to = from + waitParent;
+
+                    if (LOGGER.isDebugEnabled()) {
+                        LOGGER.debug("Waiting for parentEventId in an interval of size {} with a step {}.", Duration.ofMillis(waitParent), Duration.ofMillis(waitingStep));
+                    }
 
                     while(from < to) {
-                        if (sleepTime > to - from) {
-                            sleepTime = to - from;
-                        }
-
-                        Thread.sleep(sleepTime);
+                        Thread.sleep(Math.min(waitingStep, to - from));
 
                         parent = storage.getTestEvent(new StoredTestEventId(parentId));
-                        if (parent == null) from += sleepTime;
+                        if (parent == null) from += waitingStep;
                         else break;
                     }
 
                     if (parent == null) {
-                        LOGGER.info("Failed to extract test event data {}", parentId);
+                        LOGGER.debug("Failed to extract test event data {}", parentId);
+                        notFoundParent.add(parentId);
                         return eventAncestors;
                     }
                 }

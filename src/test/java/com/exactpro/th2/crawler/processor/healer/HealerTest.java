@@ -140,15 +140,15 @@ public class HealerTest {
         EventID childId = EventID.newBuilder().setId(CHILD_EVENT_ID).build();
         EventID grandchildId = EventID.newBuilder().setId(GRANDCHILD_EVENT_ID).build();
 
-        EventDataRequest.Builder request = EventDataRequest.newBuilder()
-                .setId(CRAWLER_INFO.getId());
-
-        request.addEventData(buildEvent(parentId, null, EventStatus.SUCCESS));
-        request.addEventData(buildEvent(childId, parentId, EventStatus.SUCCESS));
-        request.addEventData(buildEvent(grandchildId, childId, EventStatus.FAILED));
+        EventDataRequest request = EventDataRequest.newBuilder()
+                .setId(CRAWLER_INFO.getId())
+                .addEventData(buildEvent(parentId, null, EventStatus.SUCCESS))
+                .addEventData(buildEvent(childId, parentId, EventStatus.SUCCESS))
+                .addEventData(buildEvent(grandchildId, childId, EventStatus.FAILED))
+                .build();
 
         blockingStub.crawlerConnect(CRAWLER_INFO);
-        blockingStub.sendEvent(request.build());
+        blockingStub.sendEvent(request);
         verify(STORAGE_MOCK).updateEventStatus(events.get(0), false);
         verify(STORAGE_MOCK).updateEventStatus(events.get(1), false);
     }
@@ -159,15 +159,15 @@ public class HealerTest {
         EventID childId1 = EventID.newBuilder().setId(CHILD_EVENT_ID+"_1").build();
         EventID childId2 = EventID.newBuilder().setId(CHILD_EVENT_ID+"_2").build();
 
-        EventDataRequest.Builder request = EventDataRequest.newBuilder()
-                .setId(CRAWLER_INFO.getId());
-
-        request.addEventData(buildEvent(childId, null, EventStatus.SUCCESS));
-        request.addEventData(buildEvent(childId1, null, EventStatus.SUCCESS));
-        request.addEventData(buildEvent(childId2, null, EventStatus.FAILED));
+        EventDataRequest request = EventDataRequest.newBuilder()
+                .setId(CRAWLER_INFO.getId())
+                .addEventData(buildEvent(childId, null, EventStatus.SUCCESS))
+                .addEventData(buildEvent(childId1, null, EventStatus.SUCCESS))
+                .addEventData(buildEvent(childId2, null, EventStatus.FAILED))
+                .build();
 
         blockingStub.crawlerConnect(CRAWLER_INFO);
-        EventResponse response = blockingStub.sendEvent(request.build());
+        EventResponse response = blockingStub.sendEvent(request);
 
         EventResponse expended = EventResponse.newBuilder().setId(childId2).build();
         assertEquals(expended, response);
