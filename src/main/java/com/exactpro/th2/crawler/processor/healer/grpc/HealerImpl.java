@@ -44,6 +44,7 @@ import com.exactpro.th2.crawler.processor.healer.cfg.HealerConfiguration;
 import com.exactpro.th2.dataprovider.grpc.EventData;
 import com.exactpro.th2.crawler.processor.healer.cache.EventsCache;
 import com.google.protobuf.Empty;
+import io.prometheus.client.Counter;
 
 import io.grpc.stub.StreamObserver;
 
@@ -58,6 +59,16 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
     private final long waitParent;
     private final long waitingStep;
     private Set<String> notFoundParent;
+
+    private static final Counter EVENT_RETURN_CORRECT_STATUS = Counter.build()
+            .name("th2_return_correct_status")
+            .help("Quantity of events with corrected statuses")
+            .register();
+
+    private static final Counter EVENT_NOT_FOUND = Counter.build()
+            .name("th2_not_found")
+            .help("Quantity of events with not found id of a parent event")
+            .register();
 
     public HealerImpl(HealerConfiguration configuration, CradleStorage storage) {
         this.configuration = requireNonNull(configuration, "Configuration cannot be null");
@@ -140,6 +151,15 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
             }
 
             EventResponse response = builder.build();
+
+            if (!notFoundParent.isEmpty()){
+                int failParent = notFoundParent.size();
+                EVENT_NOT_FOUND.inc(failParent);
+                EVENT_RETURN_CORRECT_STATUS.inc(eventsCount-failParent);
+            }
+            else{
+                EVENT_RETURN_CORRECT_STATUS.inc(eventsCount);
+            }
 
             if (LOGGER.isInfoEnabled()) {
                 LOGGER.info("sendEvent response: {}", toJson(response, true));

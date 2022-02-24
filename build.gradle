@@ -55,17 +55,21 @@ jar {
 dependencies {
     api platform('com.exactpro.th2:bom:3.1.0')
 
-    implementation 'com.exactpro.th2:common:3.32.0'
+    implementation 'com.exactpro.th2:common:3.32.1'
     implementation "com.exactpro.th2:grpc-crawler-data-processor:0.2.0"
 
-    implementation "com.exactpro.th2:cradle-cassandra:2.20.2"
+    implementation 'com.exactpro.th2:cradle-cassandra:3.1.0'
 
-    implementation "org.slf4j:slf4j-log4j12"
-    implementation "org.slf4j:slf4j-api"
-    implementation 'junit:junit:4.13.1'
+    implementation 'org.slf4j:slf4j-log4j12:1.7.36'
+    implementation 'org.slf4j:slf4j-api:1.7.36'
+    implementation 'junit:junit:4.13.2'
 
     testImplementation "org.junit.jupiter:junit-jupiter-api:${jupiterVersion}"
     testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:${jupiterVersion}"
+
+    implementation 'io.prometheus:simpleclient:0.15.0'
+    implementation 'io.prometheus:simpleclient_hotspot:0.15.0'
+    implementation 'io.prometheus:simpleclient_httpserver:0.15.0'
 
     testImplementation group: 'io.grpc', name: 'grpc-testing', version: '1.32.1'
 
