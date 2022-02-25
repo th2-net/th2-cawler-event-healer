@@ -61,12 +61,12 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
     private Set<String> notFoundParent;
 
     private static final Counter EVENT_RETURN_CORRECT_STATUS = Counter.build()
-            .name("th2_return_correct_status")
+            .name("th2_event_return_correct_status")
             .help("Quantity of events with corrected statuses")
             .register();
 
     private static final Counter EVENT_NOT_FOUND = Counter.build()
-            .name("th2_not_found")
+            .name("th2_event_not_found")
             .help("Quantity of events with not found id of a parent event")
             .register();
 
@@ -152,15 +152,6 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
 
             EventResponse response = builder.build();
 
-            if (!notFoundParent.isEmpty()){
-                int failParent = notFoundParent.size();
-                EVENT_NOT_FOUND.inc(failParent);
-                EVENT_RETURN_CORRECT_STATUS.inc(eventsCount-failParent);
-            }
-            else{
-                EVENT_RETURN_CORRECT_STATUS.inc(eventsCount);
-            }
-
             if (LOGGER.isInfoEnabled()) {
                 LOGGER.info("sendEvent response: {}", toJson(response, true));
             }
@@ -175,6 +166,8 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
 
     private void heal(Collection<EventData> events) throws IOException, InterruptedException {
         notFoundParent = new HashSet<>();
+        int quantityHealed = 0;
+
         List<InnerEvent> eventAncestors;
         for (EventData event : events) {
             if (event.getSuccessful() == EventStatus.FAILED && event.hasParentEventId()) {
@@ -187,9 +180,19 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
                         storage.updateEventStatus(ancestorEvent, false);
                         ancestor.markFailed();
                         LOGGER.info("Event {} healed", ancestorEvent.getId());
+                        quantityHealed++;
                     }
                 }
             }
+        }
+
+        if (!notFoundParent.isEmpty()){
+            int quantityNotFound = notFoundParent.size();
+            EVENT_NOT_FOUND.inc(quantityNotFound);
+            EVENT_RETURN_CORRECT_STATUS.inc(quantityHealed - quantityNotFound);
+        }
+        else{
+            EVENT_RETURN_CORRECT_STATUS.inc(quantityHealed);
         }
     }
 
