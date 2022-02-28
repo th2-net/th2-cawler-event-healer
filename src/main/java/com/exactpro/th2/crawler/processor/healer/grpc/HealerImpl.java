@@ -174,11 +174,10 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
                 eventAncestors = getAncestors(event);
 
                 for (InnerEvent ancestor : eventAncestors) {
-                    quantityHealed++;
-                    
                     StoredTestEventWrapper ancestorEvent = ancestor.event;
 
                     if (ancestor.success) {
+                        quantityHealed++;
                         storage.updateEventStatus(ancestorEvent, false);
                         ancestor.markFailed();
                         LOGGER.info("Event {} healed", ancestorEvent.getId());
@@ -186,7 +185,6 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
                 }
             }
         }
-
         if (!notFoundParent.isEmpty()){
             int quantityNotFound = notFoundParent.size();
             EVENT_NOT_FOUND.inc(quantityNotFound);
@@ -246,9 +244,7 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
 
             StoredTestEventId eventId = innerEvent.event.getParentId();
 
-            if (eventId == null)
-                break;
-
+            if (eventId == null) break;
             parentId = eventId.toString();
         }
 
