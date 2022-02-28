@@ -185,12 +185,11 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
                 }
             }
         }
+        
         if (!notFoundParent.isEmpty()){
-            int quantityNotFound = notFoundParent.size();
-            EVENT_NOT_FOUND.inc(quantityNotFound);
-            EVENT_RETURN_CORRECT_STATUS.inc(quantityHealed - quantityNotFound);
+            EVENT_NOT_FOUND.inc(notFoundParent.size());
         }
-        else{
+        if (quantityHealed > 0){
             EVENT_RETURN_CORRECT_STATUS.inc(quantityHealed);
         }
     }
