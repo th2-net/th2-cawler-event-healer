@@ -60,13 +60,13 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
     private final long waitingStep;
     private Set<String> notFoundParent;
 
-    private static final Counter EVENT_RETURN_CORRECT_STATUS = Counter.build()
-            .name("th2_event_return_correct_status")
+    private static final Counter CRAWLER_PROCESSOR_EVENT_CORRECTED_STATUS_TOTAL = Counter.build()
+            .name("th2_crawler_processor_event_corrected_status_total")
             .help("Quantity of events with corrected statuses")
             .register();
 
-    private static final Counter EVENT_NOT_FOUND = Counter.build()
-            .name("th2_event_not_found")
+    private static final Counter CRAWLER_PROCESSOR_EVENT_NOT_FOUND_TOTAL = Counter.build()
+            .name("th2_crawler_processor_event_not_found_total")
             .help("Quantity of events with not found id of a parent event")
             .register();
 
@@ -185,12 +185,12 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
                 }
             }
         }
-        
+
         if (!notFoundParent.isEmpty()){
-            EVENT_NOT_FOUND.inc(notFoundParent.size());
+            CRAWLER_PROCESSOR_EVENT_NOT_FOUND_TOTAL.inc(notFoundParent.size());
         }
         if (quantityHealed > 0){
-            EVENT_RETURN_CORRECT_STATUS.inc(quantityHealed);
+            CRAWLER_PROCESSOR_EVENT_CORRECTED_STATUS_TOTAL.inc(quantityHealed);
         }
     }
 
