@@ -232,6 +232,7 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
                         return eventAncestors;
                     }
                 }
+                else notFoundParent.remove(parentId);
 
                 innerEvent = new InnerEvent(parent, parent.isSuccess());
                 cache.put(parentId, innerEvent);
