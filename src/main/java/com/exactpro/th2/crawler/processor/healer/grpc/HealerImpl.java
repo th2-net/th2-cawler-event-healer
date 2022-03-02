@@ -222,8 +222,11 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
                         Thread.sleep(Math.min(waitingStep, to - from));
 
                         parent = storage.getTestEvent(new StoredTestEventId(parentId));
-                        if (parent == null) from += waitingStep;
-                        else break;
+                        if (parent == null) {
+                            from += waitingStep;
+                        } else {
+                            break;
+                        }
                     }
 
                     if (parent == null) {
@@ -231,8 +234,9 @@ public class HealerImpl extends DataProcessorGrpc.DataProcessorImplBase {
                         notFoundParent.add(parentId);
                         return eventAncestors;
                     }
+                } else {
+                    notFoundParent.remove(parentId);
                 }
-                else notFoundParent.remove(parentId);
 
                 innerEvent = new InnerEvent(parent, parent.isSuccess());
                 cache.put(parentId, innerEvent);
