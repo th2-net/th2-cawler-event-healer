@@ -67,6 +67,10 @@ dependencies {
     testImplementation "org.junit.jupiter:junit-jupiter-api:${jupiterVersion}"
     testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:${jupiterVersion}"
 
+    implementation('io.prometheus:simpleclient') {
+        because('metrics to export')
+    }
+
     testImplementation group: 'io.grpc', name: 'grpc-testing', version: '1.32.1'
 
     testImplementation group: 'org.mockito', name: 'mockito-core', version: '3.11.2'
