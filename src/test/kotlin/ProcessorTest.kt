@@ -54,7 +54,7 @@ class ProcessorTest {
         processor = Processor(
             cradleStorage,
             eventBatcher,
-            Settings()
+            Settings(1)
         )
     }
 
@@ -82,10 +82,10 @@ class ProcessorTest {
         }
 
         processor.handle(INTERVAL_EVENT_ID, eventB.toGrpcEvent())
-        verify(cradleStorage, never().description("Load event")).getTestEvent(any())
-        verify(cradleStorage, never().description("Update event")).updateEventStatus(any(), any())
+        verify(cradleStorage, never().description("Load events")).getTestEvent(any())
+        verify(cradleStorage, never().description("Update events")).updateEventStatus(any(), any())
 
-        verify(eventBatcher, never().description("Publish event")).onEvent(any())
+        verify(eventBatcher, never().description("Publish events")).onEvent(any())
     }
 
     @Test
@@ -116,7 +116,106 @@ class ProcessorTest {
         verify(cradleStorage, never().description("Update event D")).updateEventStatus(eq(eventD), eq(false))
         verify(cradleStorage, times(2).description("Update events")).updateEventStatus(any(), any())
 
-        verify(eventBatcher, times(2).description("Publish event")).onEvent(any())
+        verify(eventBatcher, times(2).description("Publish events")).onEvent(any())
+    }
+
+//    @Test // cache is drained asynchronously
+//    fun `eviction from cache`() {
+//        val eventA = A_EVENT_ID.createSingleEvent(null, "A", true).apply {
+//            whenever(cradleStorage.getTestEvent(eq(this.id))).thenReturn(this)
+//        }
+//        val eventB = B_EVENT_ID.createSingleEvent(eventA.id, "B", false).apply {
+//            whenever(cradleStorage.getTestEvent(eq(this.id))).thenReturn(this)
+//        }
+//
+//        val eventC = C_EVENT_ID.createSingleEvent(null, "C", true).apply {
+//            whenever(cradleStorage.getTestEvent(eq(this.id))).thenReturn(this)
+//        }
+//        val eventD = D_EVENT_ID.createSingleEvent(eventC.id, "D", false).apply {
+//            whenever(cradleStorage.getTestEvent(eq(this.id))).thenReturn(this)
+//        }
+//
+//        processor.handle(INTERVAL_EVENT_ID, eventB.toGrpcEvent())
+//        verify(cradleStorage, times(1).description("Load event A")).getTestEvent(eq(eventA.id))
+//        verify(cradleStorage, times(1).description("Load events")).getTestEvent(any())
+//
+//        verify(cradleStorage, times(1).description("Update event A")).updateEventStatus(eq(eventA), eq(false))
+//        verify(cradleStorage, times(1).description("Update events")).updateEventStatus(any(), any())
+//
+//        verify(eventBatcher, times(1).description("Publish events")).onEvent(any())
+//
+//
+//        processor.handle(INTERVAL_EVENT_ID, eventD.toGrpcEvent())
+//        verify(cradleStorage, times(1).description("Load event C")).getTestEvent(eq(eventC.id))
+//        verify(cradleStorage, times(2).description("Load events")).getTestEvent(any())
+//
+//        verify(cradleStorage, times(1).description("Update event C")).updateEventStatus(eq(eventC), eq(false))
+//        verify(cradleStorage, times(2).description("Update events")).updateEventStatus(any(), any())
+//
+//        verify(eventBatcher, times(2).description("Publish events")).onEvent(any())
+//
+//        val eventAUpdated = eventA.id.createSingleEvent(null, "A", false).apply {
+//            whenever(cradleStorage.getTestEvent(eq(this.id))).thenReturn(this)
+//        }
+//
+//        processor.handle(INTERVAL_EVENT_ID, eventB.toGrpcEvent())
+//        verify(cradleStorage, times(1).description("Load updated event A")).getTestEvent(eq(eventAUpdated.id))
+//        verify(cradleStorage, times(3).description("Load events")).getTestEvent(any())
+//
+//        verify(cradleStorage, times(2).description("Update events")).updateEventStatus(any(), any())
+//
+//        verify(eventBatcher, times(2).description("Publish events")).onEvent(any())
+//    }
+
+    @Test
+    fun `heal parent event twice`() {
+        val eventA = A_EVENT_ID.createSingleEvent(null, "A", true).apply {
+            whenever(cradleStorage.getTestEvent(eq(this.id))).thenReturn(this)
+        }
+        val eventB = B_EVENT_ID.createSingleEvent(eventA.id, "B", false).apply {
+            whenever(cradleStorage.getTestEvent(eq(this.id))).thenReturn(this)
+        }
+        val eventC = C_EVENT_ID.createSingleEvent(eventA.id, "C", false).apply {
+            whenever(cradleStorage.getTestEvent(eq(this.id))).thenReturn(this)
+        }
+
+        processor.handle(INTERVAL_EVENT_ID, eventB.toGrpcEvent())
+        verify(cradleStorage, times(1).description("Load event A")).getTestEvent(eq(eventA.id))
+        verify(cradleStorage, never().description("Load event B")).getTestEvent(eq(eventB.id))
+        verify(cradleStorage, never().description("Load event C")).getTestEvent(eq(eventC.id))
+        verify(cradleStorage, times(1).description("Load events")).getTestEvent(any())
+
+        verify(cradleStorage, times(1).description("Update event A")).updateEventStatus(eq(eventA), eq(false))
+        verify(cradleStorage, times(1).description("Update events")).updateEventStatus(any(), any())
+
+        verify(eventBatcher, times(1).description("Publish event")).onEvent(any())
+
+        processor.handle(INTERVAL_EVENT_ID, eventC.toGrpcEvent())
+        verify(cradleStorage, times(1).description("Load events")).getTestEvent(any())
+        verify(cradleStorage, times(1).description("Update events")).updateEventStatus(any(), any())
+        verify(eventBatcher, times(1).description("Publish event")).onEvent(any())
+    }
+
+    @Test
+    fun `heal failed event twice`() {
+        val eventA = A_EVENT_ID.createSingleEvent(null, "A", true).apply {
+            whenever(cradleStorage.getTestEvent(eq(this.id))).thenReturn(this)
+        }
+        val eventB = B_EVENT_ID.createSingleEvent(eventA.id, "B", false).apply {
+            whenever(cradleStorage.getTestEvent(eq(this.id))).thenReturn(this)
+        }
+
+        repeat(2) { iteration ->
+            processor.handle(INTERVAL_EVENT_ID, eventB.toGrpcEvent())
+            verify(cradleStorage, times(1).description("Load event A, iteration $iteration")).getTestEvent(eq(eventA.id))
+            verify(cradleStorage, never().description("Load event B, iteration $iteration")).getTestEvent(eq(eventB.id))
+            verify(cradleStorage, times(1).description("Load events, iteration $iteration")).getTestEvent(any())
+
+            verify(cradleStorage, times(1).description("Update event A, iteration $iteration")).updateEventStatus(eq(eventA), eq(false))
+            verify(cradleStorage, times(1).description("Update events, iteration $iteration")).updateEventStatus(any(), any())
+
+            verify(eventBatcher, times(1).description("Publish event, iteration $iteration")).onEvent(any())
+        }
     }
 
     private fun StoredTestEventSingle.toGrpcEvent() = Event.newBuilder().apply {
@@ -147,66 +246,26 @@ class ProcessorTest {
         parentId: StoredTestEventId?,
         description: String,
         success: Boolean
-    ): StoredTestEventSingle {
-        val id = this.createEventId()
-        return StoredTestEventSingle(
-            id,
-            "$description name",
-            "$description type",
-            parentId,
-            null,
-            success,
-            ByteArray(10),
-            emptySet(),
-            PageId(id.bookId, PAGE_NAME),
-            null,
-            Instant.now()
-        )
-    }
+    ): StoredTestEventSingle = this.createEventId()
+        .createSingleEvent(parentId, description, success)
 
-//    @Throws(CradleStorageException::class)
-//    private fun createEvents() {
-//        val instant = Instant.now()
-//        val parentEventToStore: TestEventToStore = TestEventToStore.builder()
-//            .startTimestamp(instant)
-//            .endTimestamp(instant.plus(1, ChronoUnit.MINUTES))
-//            .name("parent_event_name")
-//            .content(byteArrayOf(1, 2, 3))
-//            .id(StoredTestEventId(PARENT_EVENT_ID))
-//            .success(true)
-//            .type("event_type")
-//            .success(true)
-//            .build()
-//        val parentEventData: StoredTestEvent = StoredTestEvent.newStoredTestEventSingle(parentEventToStore)
-//        val parentEvent = StoredTestEventWrapper(parentEventData)
-//        val childEventToStore: TestEventToStore = TestEventToStore.builder()
-//            .startTimestamp(instant.plus(2, ChronoUnit.MINUTES))
-//            .endTimestamp(instant.plus(3, ChronoUnit.MINUTES))
-//            .name("child_event_name")
-//            .content(byteArrayOf(1, 2, 3))
-//            .id(StoredTestEventId("child_event_id"))
-//            .parentId(StoredTestEventId(PARENT_EVENT_ID))
-//            .success(true)
-//            .type("event_type")
-//            .build()
-//        val childEventData: StoredTestEvent = StoredTestEvent.newStoredTestEventSingle(childEventToStore)
-//        val childEvent = StoredTestEventWrapper(childEventData)
-//        val grandchildEventToStore: TestEventToStore = TestEventToStore.builder()
-//            .startTimestamp(instant.plus(4, ChronoUnit.MINUTES))
-//            .endTimestamp(instant.plus(5, ChronoUnit.MINUTES))
-//            .name("grandchild_event_name")
-//            .content(byteArrayOf(1, 2, 3))
-//            .id(StoredTestEventId(GRANDCHILD_EVENT_ID))
-//            .parentId(StoredTestEventId(CHILD_EVENT_ID))
-//            .type("event_type")
-//            .success(false)
-//            .build()
-//        val grandchildEventData: StoredTestEvent = StoredTestEvent.newStoredTestEventSingle(grandchildEventToStore)
-//        val grandchildEvent = StoredTestEventWrapper(grandchildEventData)
-//        events.add(parentEvent)
-//        events.add(childEvent)
-//        events.add(grandchildEvent)
-//    }
+    private fun StoredTestEventId.createSingleEvent(
+        parentId: StoredTestEventId?,
+        description: String,
+        success: Boolean
+    ): StoredTestEventSingle = StoredTestEventSingle(
+        this,
+        "$description name",
+        "$description type",
+        parentId,
+        null,
+        success,
+        ByteArray(10),
+        emptySet(),
+        PageId(bookId, PAGE_NAME),
+        null,
+        Instant.now()
+    )
 
     companion object {
         private const val BOOK_NAME = "book"

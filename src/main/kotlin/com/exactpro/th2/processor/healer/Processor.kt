@@ -49,6 +49,7 @@ class Processor(
                 K_LOGGER.debug {
                     "The $parentId has been already updated for ${event.id.toStoredTestEventId()} event id"
                 }
+                parentId = null
             } else {
                 //FIXME: event can't be exist
                 val parentEvent = cradleStore.getTestEvent(parentId)
