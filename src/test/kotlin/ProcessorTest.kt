@@ -29,6 +29,7 @@ import com.exactpro.th2.common.grpc.RawMessage
 import com.exactpro.th2.common.utils.event.EventBatcher
 import com.exactpro.th2.common.utils.message.toTimestamp
 import com.exactpro.th2.processor.api.IProcessor
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
@@ -39,6 +40,7 @@ import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import java.time.Instant
+import java.util.concurrent.TimeUnit
 import kotlin.test.assertFailsWith
 
 class ProcessorTest {
@@ -54,8 +56,14 @@ class ProcessorTest {
         processor = Processor(
             cradleStorage,
             eventBatcher,
-            Settings(1)
+            SETTINGS
         )
+    }
+
+    @AfterEach
+    fun afterEach() {
+        processor.close()
+        verify(cradleStorage, times(1).description("Dispose cradle storage")).dispose()
     }
 
     @Test
@@ -73,11 +81,33 @@ class ProcessorTest {
     }
 
     @Test
-    fun `doesn't heal success event`() {
-        val eventA = A_EVENT_ID.createSingleEvent(null, "A", true).apply {
+    fun `unsubmitted event`() {
+        val eventA = A_EVENT_ID.toSingleEvent(null, "A", false)
+        val eventB = B_EVENT_ID.toSingleEvent(eventA.id, "B", false).apply {
             whenever(cradleStorage.getTestEvent(eq(this.id))).thenReturn(this)
         }
-        val eventB = B_EVENT_ID.createSingleEvent(eventA.id, "B", true).apply {
+
+        processor.handle(INTERVAL_EVENT_ID, eventB.toGrpcEvent())
+
+        SETTINGS.updateUnsubmittedEventTimeUnit
+            .sleep(SETTINGS.updateUnsubmittedEventInterval * SETTINGS.updateUnsubmittedEventAttempts * 2)
+
+        verify(cradleStorage, times(SETTINGS.updateUnsubmittedEventAttempts).description("Load event A"))
+            .getTestEvent(eq(eventA.id))
+        verify(cradleStorage, times(SETTINGS.updateUnsubmittedEventAttempts).description("Load events"))
+            .getTestEvent(any())
+        verify(cradleStorage, never().description("Update events")).updateEventStatus(any(), any())
+
+        verify(eventBatcher, times(SETTINGS.updateUnsubmittedEventAttempts).description("Publish events"))
+            .onEvent(any())
+    }
+
+    @Test
+    fun `doesn't heal success event`() {
+        val eventA = A_EVENT_ID.toSingleEvent(null, "A", true).apply {
+            whenever(cradleStorage.getTestEvent(eq(this.id))).thenReturn(this)
+        }
+        val eventB = B_EVENT_ID.toSingleEvent(eventA.id, "B", true).apply {
             whenever(cradleStorage.getTestEvent(eq(this.id))).thenReturn(this)
         }
 
@@ -90,16 +120,16 @@ class ProcessorTest {
 
     @Test
     fun `heal parent events until failed event`() {
-        val eventA = A_EVENT_ID.createSingleEvent(null, "A", false).apply {
+        val eventA = A_EVENT_ID.toSingleEvent(null, "A", false).apply {
             whenever(cradleStorage.getTestEvent(eq(this.id))).thenReturn(this)
         }
-        val eventB = B_EVENT_ID.createSingleEvent(eventA.id, "B", true).apply {
+        val eventB = B_EVENT_ID.toSingleEvent(eventA.id, "B", true).apply {
             whenever(cradleStorage.getTestEvent(eq(this.id))).thenReturn(this)
         }
-        val eventC = C_EVENT_ID.createSingleEvent(eventB.id, "C", true).apply {
+        val eventC = C_EVENT_ID.toSingleEvent(eventB.id, "C", true).apply {
             whenever(cradleStorage.getTestEvent(eq(this.id))).thenReturn(this)
         }
-        val eventD = D_EVENT_ID.createSingleEvent(eventC.id, "D", false).apply {
+        val eventD = D_EVENT_ID.toSingleEvent(eventC.id, "D", false).apply {
             whenever(cradleStorage.getTestEvent(eq(this.id))).thenReturn(this)
         }
 
@@ -169,13 +199,13 @@ class ProcessorTest {
 
     @Test
     fun `heal parent event twice`() {
-        val eventA = A_EVENT_ID.createSingleEvent(null, "A", true).apply {
+        val eventA = A_EVENT_ID.toSingleEvent(null, "A", true).apply {
             whenever(cradleStorage.getTestEvent(eq(this.id))).thenReturn(this)
         }
-        val eventB = B_EVENT_ID.createSingleEvent(eventA.id, "B", false).apply {
+        val eventB = B_EVENT_ID.toSingleEvent(eventA.id, "B", false).apply {
             whenever(cradleStorage.getTestEvent(eq(this.id))).thenReturn(this)
         }
-        val eventC = C_EVENT_ID.createSingleEvent(eventA.id, "C", false).apply {
+        val eventC = C_EVENT_ID.toSingleEvent(eventA.id, "C", false).apply {
             whenever(cradleStorage.getTestEvent(eq(this.id))).thenReturn(this)
         }
 
@@ -198,10 +228,10 @@ class ProcessorTest {
 
     @Test
     fun `heal failed event twice`() {
-        val eventA = A_EVENT_ID.createSingleEvent(null, "A", true).apply {
+        val eventA = A_EVENT_ID.toSingleEvent(null, "A", true).apply {
             whenever(cradleStorage.getTestEvent(eq(this.id))).thenReturn(this)
         }
-        val eventB = B_EVENT_ID.createSingleEvent(eventA.id, "B", false).apply {
+        val eventB = B_EVENT_ID.toSingleEvent(eventA.id, "B", false).apply {
             whenever(cradleStorage.getTestEvent(eq(this.id))).thenReturn(this)
         }
 
@@ -235,21 +265,21 @@ class ProcessorTest {
         startTimestamp = this@toGrpcEventId.startTimestamp.toTimestamp()
     }.build()
 
-    private fun String.createEventId() = StoredTestEventId(
+    private fun String.toEventId() = StoredTestEventId(
         BookId(BOOK_NAME),
         SCOPE_NAME,
         Instant.now(),
         this
     )
 
-    private fun String.createSingleEvent(
+    private fun String.toSingleEvent(
         parentId: StoredTestEventId?,
         description: String,
         success: Boolean
-    ): StoredTestEventSingle = this.createEventId()
-        .createSingleEvent(parentId, description, success)
+    ): StoredTestEventSingle = this.toEventId()
+        .toSingleEvent(parentId, description, success)
 
-    private fun StoredTestEventId.createSingleEvent(
+    private fun StoredTestEventId.toSingleEvent(
         parentId: StoredTestEventId?,
         description: String,
         success: Boolean
@@ -276,6 +306,7 @@ class ProcessorTest {
         private const val C_EVENT_ID = "c_event_id"
         private const val D_EVENT_ID = "d_event_id"
 
+        private val SETTINGS = Settings(1, 1, TimeUnit.MILLISECONDS, 3)
         private val INTERVAL_EVENT_ID = EventID.newBuilder().apply {
             bookName = BOOK_NAME
             scope = SCOPE_NAME

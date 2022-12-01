@@ -15,16 +15,22 @@
  */
 package com.exactpro.th2.processor.healer
 
+import com.exactpro.cradle.BookId
 import com.exactpro.cradle.CradleStorage
 import com.exactpro.cradle.testevents.StoredTestEventId
+import com.exactpro.th2.common.event.Event.Status.FAILED
 import com.exactpro.th2.common.grpc.Event
 import com.exactpro.th2.common.grpc.EventID
 import com.exactpro.th2.common.grpc.EventStatus
+import com.exactpro.th2.common.util.toInstant
 import com.exactpro.th2.common.utils.event.EventBatcher
 import com.exactpro.th2.processor.api.IProcessor
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
 import mu.KotlinLogging
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 typealias EventBuilder = com.exactpro.th2.common.event.Event
 
@@ -34,8 +40,17 @@ class Processor(
     configuration: Settings
 ) : IProcessor {
 
+    private val interval = configuration.updateUnsubmittedEventInterval
+    private val timeUtil = configuration.updateUnsubmittedEventTimeUnit
+    private val attempts = configuration.updateUnsubmittedEventAttempts
+
+    private val executor = Executors.newScheduledThreadPool(1)
+
+    private val unsubmittedEvents: MutableMap<StoredTestEventId, Int> = ConcurrentHashMap()
+
     private val statusCache: Cache<StoredTestEventId, Any> = Caffeine.newBuilder()
         .maximumSize(configuration.maxCacheCapacity.toLong())
+        .executor(executor)
         .build()
 
     override fun handle(intervalEventId: EventID, event: Event) {
@@ -43,47 +58,143 @@ class Processor(
             return
         }
 
-        var parentId: StoredTestEventId? = event.parentId.toStoredTestEventId()
-        while (parentId != null) {
-            if (statusCache.getIfPresent(parentId) === FAKE_OBJECT) {
-                K_LOGGER.debug {
-                    "The $parentId has been already updated for ${event.id.toStoredTestEventId()} event id"
-                }
-                parentId = null
-            } else {
-                //FIXME: event can't be exist
-                val parentEvent = cradleStore.getTestEvent(parentId)
-
-                parentId = if (parentEvent.isSuccess) {
-                    cradleStore.updateEventStatus(parentEvent, false)
-                    reportUpdateEvent(intervalEventId, parentEvent.id)
-                    parentEvent.parentId
-                } else {
-                    K_LOGGER.debug {
-                        "The ${parentEvent.id} has already has failed status for ${event.id.toStoredTestEventId()} event id"
-                    }
-                    null
-                }
-
-                statusCache.put(parentEvent.id, FAKE_OBJECT)
-            }
-        }
+        heal(
+            intervalEventId,
+            event.id.toStoredTestEventId(),
+            event.parentId.toStoredTestEventId()
+        )
     }
 
     override fun close() {
+        // Processor factory doesn't close cradle storage
         cradleStore.dispose()
+        executor.shutdown()
+        if (!executor.awaitTermination(1, TimeUnit.SECONDS)) {
+            K_LOGGER.warn { "Executor isn't shutdown during 1 sec" }
+            executor.shutdownNow()
+        }
+    }
+
+    /**
+     * @return true if at least the first is healed
+     */
+    private fun heal(
+        reportEventId: EventID,
+        childEventId: StoredTestEventId,
+        parentEventId: StoredTestEventId?
+    ): Boolean {
+        var sickEventId = parentEventId
+        var result = false
+        while (sickEventId != null) {
+            if (statusCache.getIfPresent(sickEventId) === FAKE_OBJECT) {
+                K_LOGGER.debug { "The $sickEventId has been already updated for $childEventId child event id" }
+                sickEventId = null
+            } else {
+                val parentEvent = cradleStore.getTestEvent(sickEventId)
+                if (parentEvent == null) {
+                    val attempt = unsubmittedEvents.compute(sickEventId) { _, previous ->
+                        when (val next = (previous ?: 0) + 1) {
+                            attempts -> null
+                            else     -> next
+                        }
+                    }
+                    when (attempt) {
+                        null    -> reportUnhealedEvent(reportEventId, sickEventId)
+                        else    -> {
+                            scheduleHeal(reportEventId, childEventId, sickEventId)
+                            reportUnsubmittedEvent(reportEventId, sickEventId, attempt)
+                        }
+                    }
+                    sickEventId = null
+                } else {
+                    result = true
+                    sickEventId = if (parentEvent.isSuccess) {
+                        cradleStore.updateEventStatus(parentEvent, false) //FIXME: push sub-event for updated
+                        reportUpdateEvent(reportEventId, parentEvent.id)
+                        parentEvent.parentId
+                    } else {
+                        K_LOGGER.debug {
+                            "The ${parentEvent.id} has already has failed status for $childEventId child event id"
+                        }
+                        null
+                    }
+                    statusCache.put(parentEvent.id, FAKE_OBJECT)
+                }
+            }
+        }
+        return result
+    }
+
+    private fun scheduleHeal(
+        reportEventId: EventID,
+        eventId: StoredTestEventId,
+        sickEventId: StoredTestEventId
+    ) {
+        executor.schedule({
+                runCatching {
+                    heal(reportEventId, eventId, sickEventId)
+                }.onFailure { e ->
+                    reportErrorEvent(reportEventId, sickEventId, e)
+                }
+            }, interval, timeUtil
+        )
+    }
+
+    private fun reportUnhealedEvent(reportEventId: EventID, eventId: StoredTestEventId) {
+        eventBatcher.onEvent(
+            EventBuilder.start()
+                .name(
+                    "Heal of $eventId event failure after $attempts attempts with interval $interval $timeUtil"
+                )
+                .type(EVENT_TYPE_UNSUBMITTED_EVENT)
+                .status(FAILED)
+                .toProto(reportEventId)
+        )
+    }
+
+    private fun reportErrorEvent(reportEventId: EventID, eventId: StoredTestEventId, e: Throwable) {
+        // FIXME: Add link to updated event
+        eventBatcher.onEvent(
+            EventBuilder.start()
+                .name("Heal of $eventId event failure")
+                .type(EVENT_TYPE_INTERNAL_ERROR)
+                .exception(e, true)
+                .status(FAILED)
+                .toProto(reportEventId)
+        )
+    }
+
+    private fun reportUnsubmittedEvent(intervalEventId: EventID, eventId: StoredTestEventId, attempt: Int) {
+        // FIXME: Add link to updated event
+        eventBatcher.onEvent(
+            EventBuilder.start()
+                .name("The $eventId hasn't been submitted to cradle yet, attempt $attempt")
+                .type(EVENT_TYPE_UNSUBMITTED_EVENT)
+                .toProto(intervalEventId)
+        )
     }
 
     private fun reportUpdateEvent(intervalEventId: EventID, eventId: StoredTestEventId) {
         // FIXME: Add link to updated event
-        eventBatcher.onEvent(EventBuilder.start()
-            .name("Updated status of $eventId")
-            .type("Update status")
-            .toProto(intervalEventId))
+        eventBatcher.onEvent(
+            EventBuilder.start()
+                .name("Updated status of $eventId")
+                .type("Update status")
+                .toProto(intervalEventId)
+        )
     }
 
     companion object {
         private val K_LOGGER = KotlinLogging.logger {}
         private val FAKE_OBJECT: Any = Object()
+        private const val EVENT_TYPE_INTERNAL_ERROR: String = "Internal error"
+        private const val EVENT_TYPE_UNSUBMITTED_EVENT: String = "Unsubmitted event"
+
+        fun EventID.toStoredTestEventId(): StoredTestEventId = StoredTestEventId(
+            BookId(bookName),
+            scope,
+            startTimestamp.toInstant(),
+            id
+        )
     }
 }

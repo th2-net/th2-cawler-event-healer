@@ -16,13 +16,23 @@
 package com.exactpro.th2.processor.healer
 
 import com.exactpro.th2.processor.api.IProcessorSettings
+import java.util.concurrent.TimeUnit
 
 class Settings(
     val maxCacheCapacity: Int = 1_024,
+    val updateUnsubmittedEventInterval: Long = 1,
+    val updateUnsubmittedEventTimeUnit: TimeUnit = TimeUnit.SECONDS,
+    val updateUnsubmittedEventAttempts: Int = 100
 ) : IProcessorSettings {
     init {
         require(maxCacheCapacity > 0) {
-            "Size of cache cannot be negative or zero"
+            "Size of cache cannot be negative or zero, actual $maxCacheCapacity"
+        }
+        require(updateUnsubmittedEventInterval > 0) {
+            "Update unsubmitted event interval cannot be negative or zero, actual $updateUnsubmittedEventInterval"
+        }
+        require(updateUnsubmittedEventAttempts > 0) {
+            "Update unsubmitted event attempts cannot be negative or zero, actual $updateUnsubmittedEventAttempts"
         }
     }
 }
