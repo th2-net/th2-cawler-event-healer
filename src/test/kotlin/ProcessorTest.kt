@@ -41,6 +41,8 @@ import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import java.time.Instant
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class ProcessorTest {
@@ -81,7 +83,38 @@ class ProcessorTest {
     }
 
     @Test
-    fun `unsubmitted event`() {
+    fun `retry success for unsubmitted event`() {
+        val counter = AtomicInteger(SETTINGS.updateUnsubmittedEventAttempts)
+        val eventA = A_EVENT_ID.toSingleEvent(null, "A", true).apply {
+            whenever(cradleStorage.getTestEvent(eq(this.id))).thenAnswer {
+                if (counter.decrementAndGet() == 0) this else null
+            }
+        }
+        val eventB = B_EVENT_ID.toSingleEvent(eventA.id, "B", false).apply {
+            whenever(cradleStorage.getTestEvent(eq(this.id))).thenReturn(this)
+        }
+
+        processor.handle(INTERVAL_EVENT_ID, eventB.toGrpcEvent())
+
+        SETTINGS.updateUnsubmittedEventTimeUnit
+            .sleep(SETTINGS.updateUnsubmittedEventInterval * SETTINGS.updateUnsubmittedEventAttempts * 2)
+
+        assertEquals(0, counter.get(), "Requests to cradle storage mock")
+        verify(cradleStorage, times(SETTINGS.updateUnsubmittedEventAttempts).description("Load event A"))
+            .getTestEvent(eq(eventA.id))
+        verify(cradleStorage, times(SETTINGS.updateUnsubmittedEventAttempts).description("Load events"))
+            .getTestEvent(any())
+        verify(cradleStorage, times(1).description("Update event A"))
+            .updateEventStatus(eq(eventA), eq(false))
+        verify(cradleStorage, times(1).description("Update events"))
+            .updateEventStatus(any(), any())
+
+        verify(eventBatcher, times(SETTINGS.updateUnsubmittedEventAttempts).description("Publish events"))
+            .onEvent(any())
+    }
+
+    @Test
+    fun `retry failure for unsubmitted event`() {
         val eventA = A_EVENT_ID.toSingleEvent(null, "A", false)
         val eventB = B_EVENT_ID.toSingleEvent(eventA.id, "B", false).apply {
             whenever(cradleStorage.getTestEvent(eq(this.id))).thenReturn(this)
