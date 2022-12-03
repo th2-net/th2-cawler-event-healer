@@ -25,6 +25,8 @@ import com.exactpro.th2.common.grpc.EventStatus
 import com.exactpro.th2.common.util.toInstant
 import com.exactpro.th2.common.utils.event.EventBatcher
 import com.exactpro.th2.processor.api.IProcessor
+import com.exactpro.th2.processor.healer.state.State
+import com.exactpro.th2.processor.utility.OBJECT_MAPPER
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
 import mu.KotlinLogging
@@ -37,7 +39,9 @@ typealias EventBuilder = com.exactpro.th2.common.event.Event
 class Processor(
     private val cradleStore: CradleStorage,
     private val eventBatcher: EventBatcher,
-    configuration: Settings
+    processorEventId: EventID,
+    configuration: Settings,
+    serializedState: ByteArray?
 ) : IProcessor {
 
     private val interval = configuration.updateUnsubmittedEventInterval
@@ -53,6 +57,16 @@ class Processor(
         .executor(executor)
         .build()
 
+    init {
+        serializedState?.let {
+            OBJECT_MAPPER.readValue(it, State::class.java)
+                .unsubmittedEvents.forEach { stateEventId ->
+                    val sickEventId = stateEventId.toStateEventId()
+                    heal(processorEventId, null, sickEventId)
+                }
+        }
+    }
+
     override fun handle(intervalEventId: EventID, event: Event) {
         if (event.status == EventStatus.SUCCESS || !event.hasParentId()) {
             return
@@ -63,6 +77,12 @@ class Processor(
             event.id.toStoredTestEventId(),
             event.parentId.toStoredTestEventId()
         )
+    }
+
+    override fun serializeState(): ByteArray? = if (unsubmittedEvents.isEmpty()) {
+        null
+    } else {
+        OBJECT_MAPPER.writeValueAsBytes(unsubmittedEvents.keys.toState())
     }
 
     override fun close() {
@@ -80,14 +100,14 @@ class Processor(
      */
     private fun heal(
         reportEventId: EventID,
-        childEventId: StoredTestEventId,
+        childEventId: StoredTestEventId?,
         parentEventId: StoredTestEventId?
     ): Boolean {
         var sickEventId = parentEventId
         var result = false
         while (sickEventId != null) {
             if (statusCache.getIfPresent(sickEventId) === FAKE_OBJECT) {
-                K_LOGGER.debug { "The $sickEventId has been already updated for $childEventId child event id" }
+                K_LOGGER.debug { "The $sickEventId has been already updated${ childEventId?.let { " for $childEventId child event id" } ?: "" }" }
                 sickEventId = null
             } else {
                 val parentEvent = cradleStore.getTestEvent(sickEventId)
@@ -100,21 +120,19 @@ class Processor(
                     }
                     when (attempt) {
                         null    -> reportUnhealedEvent(reportEventId, sickEventId)
-                        else    -> {
-                            scheduleHeal(reportEventId, childEventId, sickEventId)
-                            reportUnsubmittedEvent(reportEventId, sickEventId, attempt)
-                        }
+                        else    -> scheduleHeal(reportEventId, childEventId, sickEventId, attempt)
                     }
                     sickEventId = null
                 } else {
                     result = true
                     sickEventId = if (parentEvent.isSuccess) {
-                        cradleStore.updateEventStatus(parentEvent, false) //FIXME: push sub-event for updated
+                        cradleStore.updateEventStatus(parentEvent, false) //FIXME: push sub-event for updated, catch exception
                         reportUpdateEvent(reportEventId, parentEvent.id)
+                        unsubmittedEvents.remove(sickEventId)
                         parentEvent.parentId
                     } else {
                         K_LOGGER.debug {
-                            "The ${parentEvent.id} has already has failed status for $childEventId child event id"
+                            "The ${parentEvent.id} has already has failed status${ childEventId?.let { " for $childEventId child event id" } ?: "" }"
                         }
                         null
                     }
@@ -127,17 +145,20 @@ class Processor(
 
     private fun scheduleHeal(
         reportEventId: EventID,
-        eventId: StoredTestEventId,
-        sickEventId: StoredTestEventId
+        childEventId: StoredTestEventId?,
+        sickEventId: StoredTestEventId,
+        attempt: Int
     ) {
         executor.schedule({
                 runCatching {
-                    heal(reportEventId, eventId, sickEventId)
+                    heal(reportEventId, childEventId, sickEventId)
                 }.onFailure { e ->
+                    K_LOGGER.error(e) { "Failure to heal $sickEventId event" }
                     reportErrorEvent(reportEventId, sickEventId, e)
                 }
             }, interval, timeUtil
         )
+        reportUnsubmittedEvent(reportEventId, sickEventId, attempt)
     }
 
     private fun reportUnhealedEvent(reportEventId: EventID, eventId: StoredTestEventId) {
@@ -149,6 +170,7 @@ class Processor(
                 .type(EVENT_TYPE_UNSUBMITTED_EVENT)
                 .status(FAILED)
                 .toProto(reportEventId)
+                .log()
         )
     }
 
@@ -161,6 +183,7 @@ class Processor(
                 .exception(e, true)
                 .status(FAILED)
                 .toProto(reportEventId)
+                .log()
         )
     }
 
@@ -171,6 +194,7 @@ class Processor(
                 .name("The $eventId hasn't been submitted to cradle yet, attempt $attempt")
                 .type(EVENT_TYPE_UNSUBMITTED_EVENT)
                 .toProto(intervalEventId)
+                .log()
         )
     }
 
@@ -190,7 +214,19 @@ class Processor(
         private const val EVENT_TYPE_INTERNAL_ERROR: String = "Internal error"
         private const val EVENT_TYPE_UNSUBMITTED_EVENT: String = "Unsubmitted event"
 
-        fun EventID.toStoredTestEventId(): StoredTestEventId = StoredTestEventId(
+        private fun Event.log(): Event {
+            val func: () -> String = {
+                "Published event: name $name, type $type, status $status, body ${body.toStringUtf8()}"
+            }
+            when(status) {
+                EventStatus.SUCCESS -> K_LOGGER.info(func)
+                EventStatus.FAILED -> K_LOGGER.warn(func)
+                else -> K_LOGGER.error(func)
+            }
+            return this
+        }
+
+        private fun EventID.toStoredTestEventId(): StoredTestEventId = StoredTestEventId(
             BookId(bookName),
             scope,
             startTimestamp.toInstant(),

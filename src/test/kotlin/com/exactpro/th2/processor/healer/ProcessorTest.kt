@@ -29,6 +29,8 @@ import com.exactpro.th2.common.grpc.RawMessage
 import com.exactpro.th2.common.utils.event.EventBatcher
 import com.exactpro.th2.common.utils.message.toTimestamp
 import com.exactpro.th2.processor.api.IProcessor
+import com.exactpro.th2.processor.healer.state.State
+import com.exactpro.th2.processor.utility.OBJECT_MAPPER
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -44,6 +46,8 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 class ProcessorTest {
     private lateinit var cradleStorage: CassandraCradleStorage
@@ -58,7 +62,9 @@ class ProcessorTest {
         processor = Processor(
             cradleStorage,
             eventBatcher,
-            SETTINGS
+            PROCESSOR_EVENT_ID,
+            SETTINGS,
+            null
         )
     }
 
@@ -80,6 +86,72 @@ class ProcessorTest {
         assertFailsWith<UnsupportedOperationException>("Call unsupported expected overload") {
             processor.handle(INTERVAL_EVENT_ID, RawMessage.getDefaultInstance())
         }
+    }
+
+    @Test
+    fun `store restore state`() {
+        val eventA = A_EVENT_ID.toSingleEvent(null, "A", true)
+        val eventB = B_EVENT_ID.toSingleEvent(eventA.id, "B", false)
+
+        // Collect unsubmitted events
+        val cradleStorageA = mock<CassandraCradleStorage> {
+            on { getTestEvent(eq(eventB.id)) }.thenReturn(eventB)
+        }
+        val eventBatcherA = mock<EventBatcher> { }
+        val processorA = Processor(
+            cradleStorageA,
+            eventBatcherA,
+            PROCESSOR_EVENT_ID,
+            Settings(
+                updateUnsubmittedEventInterval = Long.MAX_VALUE,
+                updateUnsubmittedEventTimeUnit = TimeUnit.DAYS,
+            ),
+            null
+        )
+
+        processorA.handle(INTERVAL_EVENT_ID, eventB.toGrpcEvent())
+
+        verify(cradleStorageA, never().description("Update events")).updateEventStatus(any(), any())
+
+        verify(eventBatcherA, times(1).description("Publish events")).onEvent(any())
+
+        val state = assertNotNull(processorA.serializeState(), "Not empty state")
+        assertEquals(setOf(eventA.id).toState(), OBJECT_MAPPER.readValue(state, State::class.java), "State with A event")
+
+
+        // Restart processor and heal unsubmitted events again
+        val counter = AtomicInteger(SETTINGS.updateUnsubmittedEventAttempts)
+        val cradleStorageB = mock<CassandraCradleStorage> {
+            on { getTestEvent(eq(eventA.id)) }.thenAnswer {
+                if (counter.decrementAndGet() == 0) eventA else null
+            }
+        }
+        val eventBatcherB = mock<EventBatcher> { }
+        val processorB = Processor(
+            cradleStorageB,
+            eventBatcherB,
+            PROCESSOR_EVENT_ID,
+            SETTINGS,
+            state
+        )
+
+        SETTINGS.updateUnsubmittedEventTimeUnit
+            .sleep(SETTINGS.updateUnsubmittedEventInterval * SETTINGS.updateUnsubmittedEventAttempts * 2)
+
+        assertEquals(0, counter.get(), "Requests to cradle storage mock")
+        verify(cradleStorageB, times(SETTINGS.updateUnsubmittedEventAttempts).description("Load event A"))
+            .getTestEvent(eq(eventA.id))
+        verify(cradleStorageB, times(SETTINGS.updateUnsubmittedEventAttempts).description("Load events"))
+            .getTestEvent(any())
+        verify(cradleStorageB, times(1).description("Update event A"))
+            .updateEventStatus(eq(eventA), eq(false))
+        verify(cradleStorageB, times(1).description("Update events"))
+            .updateEventStatus(any(), any())
+
+        verify(eventBatcherB, times(SETTINGS.updateUnsubmittedEventAttempts).description("Publish events"))
+            .onEvent(any())
+
+        assertNull(processorB.serializeState(), "Empty state")
     }
 
     @Test
@@ -111,6 +183,8 @@ class ProcessorTest {
 
         verify(eventBatcher, times(SETTINGS.updateUnsubmittedEventAttempts).description("Publish events"))
             .onEvent(any())
+
+        assertNull(processor.serializeState(), "Empty state")
     }
 
     @Test
@@ -133,6 +207,8 @@ class ProcessorTest {
 
         verify(eventBatcher, times(SETTINGS.updateUnsubmittedEventAttempts).description("Publish events"))
             .onEvent(any())
+
+        assertNull(processor.serializeState(), "Empty state")
     }
 
     @Test
@@ -340,6 +416,12 @@ class ProcessorTest {
         private const val D_EVENT_ID = "d_event_id"
 
         private val SETTINGS = Settings(1, 1, TimeUnit.MILLISECONDS, 3)
+        private val PROCESSOR_EVENT_ID = EventID.newBuilder().apply {
+            bookName = BOOK_NAME
+            scope = SCOPE_NAME
+            id = "processor event id"
+            startTimestamp = Instant.now().toTimestamp()
+        }.build()
         private val INTERVAL_EVENT_ID = EventID.newBuilder().apply {
             bookName = BOOK_NAME
             scope = SCOPE_NAME
