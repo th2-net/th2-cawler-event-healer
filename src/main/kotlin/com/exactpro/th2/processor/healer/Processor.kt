@@ -27,6 +27,7 @@ import com.exactpro.th2.common.utils.event.EventBatcher
 import com.exactpro.th2.processor.api.IProcessor
 import com.exactpro.th2.processor.healer.state.State
 import com.exactpro.th2.processor.utility.OBJECT_MAPPER
+import com.exactpro.th2.processor.utility.log
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
 import mu.KotlinLogging
@@ -170,7 +171,7 @@ class Processor(
                 .type(EVENT_TYPE_UNSUBMITTED_EVENT)
                 .status(FAILED)
                 .toProto(reportEventId)
-                .log()
+                .log(K_LOGGER)
         )
     }
 
@@ -183,7 +184,7 @@ class Processor(
                 .exception(e, true)
                 .status(FAILED)
                 .toProto(reportEventId)
-                .log()
+                .log(K_LOGGER)
         )
     }
 
@@ -194,7 +195,7 @@ class Processor(
                 .name("The $eventId hasn't been submitted to cradle yet, attempt $attempt")
                 .type(EVENT_TYPE_UNSUBMITTED_EVENT)
                 .toProto(intervalEventId)
-                .log()
+                .log(K_LOGGER)
         )
     }
 
@@ -213,18 +214,6 @@ class Processor(
         private val FAKE_OBJECT: Any = Object()
         private const val EVENT_TYPE_INTERNAL_ERROR: String = "Internal error"
         private const val EVENT_TYPE_UNSUBMITTED_EVENT: String = "Unsubmitted event"
-
-        private fun Event.log(): Event {
-            val func: () -> String = {
-                "Published event: name $name, type $type, status $status, body ${body.toStringUtf8()}"
-            }
-            when(status) {
-                EventStatus.SUCCESS -> K_LOGGER.info(func)
-                EventStatus.FAILED -> K_LOGGER.warn(func)
-                else -> K_LOGGER.error(func)
-            }
-            return this
-        }
 
         private fun EventID.toStoredTestEventId(): StoredTestEventId = StoredTestEventId(
             BookId(bookName),

@@ -54,7 +54,7 @@ dependencies {
 
     implementation 'com.exactpro.th2:common:4.0.0-TH2-4262-reduce-load-book-and-page-3574992387-SNAPSHOT'
     implementation "com.exactpro.th2:common-utils:0.0.1-book-and-page-3572891451-SNAPSHOT"
-    implementation "com.exactpro.th2:processor-core:0.1.0-TH2-4262-reduce-load-book-and-page-3575055063-d0fa0b3-SNAPSHOT"
+    implementation "com.exactpro.th2:processor-core:0.0.1-TH2-4262-reduce-load-book-and-page-3611999842-0e99701-SNAPSHOT"
 
     implementation "com.exactpro.th2:cradle-cassandra:4.0.0-dev-version-4-2548754188-SNAPSHOT"
 
