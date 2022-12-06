@@ -32,13 +32,13 @@ import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
 import mu.KotlinLogging
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.ScheduledExecutorService
 
 typealias EventBuilder = com.exactpro.th2.common.event.Event
 
 class Processor(
     private val cradleStore: CradleStorage,
+    private val scheduler: ScheduledExecutorService,
     private val eventBatcher: EventBatcher,
     processorEventId: EventID,
     configuration: Settings,
@@ -49,13 +49,11 @@ class Processor(
     private val timeUtil = configuration.updateUnsubmittedEventTimeUnit
     private val attempts = configuration.updateUnsubmittedEventAttempts
 
-    private val executor = Executors.newScheduledThreadPool(1)
-
     private val unsubmittedEvents: MutableMap<StoredTestEventId, Int> = ConcurrentHashMap()
 
     private val statusCache: Cache<StoredTestEventId, Any> = Caffeine.newBuilder()
         .maximumSize(configuration.maxCacheCapacity.toLong())
-        .executor(executor)
+        .executor(scheduler)
         .build()
 
     init {
@@ -86,15 +84,7 @@ class Processor(
         OBJECT_MAPPER.writeValueAsBytes(unsubmittedEvents.keys.toState())
     }
 
-    override fun close() {
-        // Processor factory doesn't close cradle storage
-        cradleStore.dispose()
-        executor.shutdown()
-        if (!executor.awaitTermination(1, TimeUnit.SECONDS)) {
-            K_LOGGER.warn { "Executor isn't shutdown during 1 sec" }
-            executor.shutdownNow()
-        }
-    }
+    override fun close() { }
 
     /**
      * @return true if at least the first is healed
@@ -150,7 +140,7 @@ class Processor(
         sickEventId: StoredTestEventId,
         attempt: Int
     ) {
-        executor.schedule({
+        scheduler.schedule({
                 runCatching {
                     heal(reportEventId, childEventId, sickEventId)
                 }.onFailure { e ->

@@ -32,9 +32,9 @@ import com.exactpro.th2.processor.api.IProcessor
 import com.exactpro.th2.processor.healer.state.State
 import com.exactpro.th2.processor.utility.OBJECT_MAPPER
 import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.doAnswer
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
@@ -42,6 +42,8 @@ import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import java.time.Instant
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertEquals
@@ -50,28 +52,28 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class ProcessorTest {
-    private lateinit var cradleStorage: CassandraCradleStorage
-    private lateinit var eventBatcher: EventBatcher
-    private lateinit var processor: IProcessor
-
-    @BeforeEach
-    fun beforeEach() {
-        cradleStorage = mock {  }
-        eventBatcher = mock {  }
-
-        processor = Processor(
-            cradleStorage,
-            eventBatcher,
-            PROCESSOR_EVENT_ID,
-            SETTINGS,
-            null
-        )
+    private val cradleStorage: CassandraCradleStorage = mock {  }
+    private val schedulerImmediateExecute: ScheduledExecutorService = mock {
+        on { schedule(any(), any(), any()) }.doAnswer { invocation ->
+            (invocation.arguments[0] as Runnable).run()
+            return@doAnswer mock<ScheduledFuture<*>> { }
+        }
     }
+    private val schedulerNeverExecute: ScheduledExecutorService = mock { }
+    private val eventBatcher: EventBatcher = mock {  }
+    private val processor: IProcessor = Processor(
+        cradleStorage,
+        schedulerImmediateExecute,
+        eventBatcher,
+        PROCESSOR_EVENT_ID,
+        SETTINGS,
+        null
+    )
+
 
     @AfterEach
     fun afterEach() {
         processor.close()
-        verify(cradleStorage, times(1).description("Dispose cradle storage")).dispose()
     }
 
     @Test
@@ -100,6 +102,7 @@ class ProcessorTest {
         val eventBatcherA = mock<EventBatcher> { }
         val processorA = Processor(
             cradleStorageA,
+            schedulerNeverExecute,
             eventBatcherA,
             PROCESSOR_EVENT_ID,
             Settings(
@@ -129,14 +132,12 @@ class ProcessorTest {
         val eventBatcherB = mock<EventBatcher> { }
         val processorB = Processor(
             cradleStorageB,
+            schedulerImmediateExecute,
             eventBatcherB,
             PROCESSOR_EVENT_ID,
             SETTINGS,
             state
         )
-
-        SETTINGS.updateUnsubmittedEventTimeUnit
-            .sleep(SETTINGS.updateUnsubmittedEventInterval * SETTINGS.updateUnsubmittedEventAttempts * 2)
 
         assertEquals(0, counter.get(), "Requests to cradle storage mock")
         verify(cradleStorageB, times(SETTINGS.updateUnsubmittedEventAttempts).description("Load event A"))
@@ -168,9 +169,6 @@ class ProcessorTest {
 
         processor.handle(INTERVAL_EVENT_ID, eventB.toGrpcEvent())
 
-        SETTINGS.updateUnsubmittedEventTimeUnit
-            .sleep(SETTINGS.updateUnsubmittedEventInterval * SETTINGS.updateUnsubmittedEventAttempts * 2)
-
         assertEquals(0, counter.get(), "Requests to cradle storage mock")
         verify(cradleStorage, times(SETTINGS.updateUnsubmittedEventAttempts).description("Load event A"))
             .getTestEvent(eq(eventA.id))
@@ -195,9 +193,6 @@ class ProcessorTest {
         }
 
         processor.handle(INTERVAL_EVENT_ID, eventB.toGrpcEvent())
-
-        SETTINGS.updateUnsubmittedEventTimeUnit
-            .sleep(SETTINGS.updateUnsubmittedEventInterval * SETTINGS.updateUnsubmittedEventAttempts * 2)
 
         verify(cradleStorage, times(SETTINGS.updateUnsubmittedEventAttempts).description("Load event A"))
             .getTestEvent(eq(eventA.id))

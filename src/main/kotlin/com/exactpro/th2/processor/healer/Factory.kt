@@ -15,31 +15,47 @@
  */
 package com.exactpro.th2.processor.healer
 
-import com.exactpro.th2.common.grpc.EventID
-import com.exactpro.th2.common.schema.factory.AbstractCommonFactory
-import com.exactpro.th2.common.utils.event.EventBatcher
+import com.exactpro.th2.common.event.Event
 import com.exactpro.th2.processor.api.IProcessor
 import com.exactpro.th2.processor.api.IProcessorFactory
 import com.exactpro.th2.processor.api.IProcessorSettings
+import com.exactpro.th2.processor.api.ProcessorContext
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.module.SimpleModule
 import com.google.auto.service.AutoService
+import java.time.Instant
 
 @Suppress("unused")
 @AutoService(IProcessorFactory::class)
 class Factory : IProcessorFactory {
-    override val settingsClass: Class<out IProcessorSettings> = Settings::class.java
-
-    override fun create(
-        commonFactory: AbstractCommonFactory,
-        eventBatcher: EventBatcher,
-        processorEventId: EventID,
-        settings: IProcessorSettings?,
-        state: ByteArray?
-    ): IProcessor {
-        settings?.let {
-            check(settings is Settings) {
-                "Settings type mismatch expected: ${Settings::class}, actual: ${settings::class}"
-            }
-            return Processor(commonFactory.cradleManager.storage, eventBatcher, processorEventId, settings, state)
-        }?: error("Settings can not be null")
+    override fun registerModules(objectMapper: ObjectMapper) {
+        with(objectMapper) {
+            registerModule(SimpleModule().addAbstractTypeMapping(IProcessorSettings::class.java, Settings::class.java))
+        }
     }
+
+    override fun create(context: ProcessorContext): IProcessor {
+        with(context) {
+            requireNotNull(settings) {
+                "Settings can not be null"
+            }.let { settings ->
+                check(settings is Settings) {
+                    "Settings type mismatch expected: ${Settings::class}, actual: ${settings::class}"
+                }
+                return Processor(
+                    commonFactory.cradleManager.storage,
+                    scheduler,
+                    eventBatcher,
+                    processorEventId,
+                    settings,
+                    state
+                )
+            }
+        }
+    }
+
+    override fun createProcessorEvent(): Event = Event.start()
+        .name("Healer event data processor ${Instant.now()}")
+        .description("Will contain all events with errors and information about processed events")
+        .type("Microservice")
 }
