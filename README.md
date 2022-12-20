@@ -17,9 +17,22 @@ spec:
   image-version: <verison>
   type: th2-conn
   custom-config:
-    name: test-event-healer
-    version: 1.0.0
-    maxCacheCapacity: 1000
+    stateSessionAlias: my-processor-state
+    enableStoreState: false
+    from: 2021-06-16T12:00:00.00Z
+    to: 2021-06-17T14:00:00.00Z
+    intervalLength: PT10M
+    syncInterval: PT10M
+    awaitTimeout: 10
+    awaitUnit: SECONDS
+    events:
+      bookToScope:
+        book1: []
+        book2: []
+    processorSettings:
+      name: test-event-healer
+      version: 1.0.0
+      maxCacheCapacity: 1000
   pins:
     grpc:
       client:
