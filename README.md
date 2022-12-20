@@ -5,7 +5,7 @@ has a "success" status, the status of the parent is wrong. Healer finds the pare
 
 ## Configuration
 
-There is an example of full configuration for the data processor
+There is an example of full configuration (infra-2.0) for the data processor
 
 ```yaml
 apiVersion: th2.exactpro.com/v1
@@ -21,8 +21,18 @@ spec:
     version: 1.0.0
     maxCacheCapacity: 1000
   pins:
-    - name: server
-      connection-type: grpc
+    grpc:
+      client:
+        - name: to_data_provider
+          service-class: com.exactpro.th2.dataprovider.lw.grpc.DataProviderService
+          linkTo:
+            - box: lw-data-provider
+              pin: server
+        - name: to_data_provider_stream
+          service-class: com.exactpro.th2.dataprovider.lw.grpc.QueueDataProviderService
+          linkTo:
+            - box: lw-data-provider
+              pin: server
   extended-settings:
     service:
       enabled: true
