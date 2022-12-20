@@ -18,7 +18,7 @@ package com.exactpro.th2.processor.healer
 import com.exactpro.th2.processor.api.IProcessorSettings
 import java.util.concurrent.TimeUnit
 
-class Settings(
+data class Settings(
     val maxCacheCapacity: Int = 1_024,
     val updateUnsubmittedEventInterval: Long = 1,
     val updateUnsubmittedEventTimeUnit: TimeUnit = TimeUnit.SECONDS,

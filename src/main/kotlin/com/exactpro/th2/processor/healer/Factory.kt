@@ -28,8 +28,8 @@ import java.time.Instant
 @Suppress("unused")
 @AutoService(IProcessorFactory::class)
 class Factory : IProcessorFactory {
-    override fun registerModules(objectMapper: ObjectMapper) {
-        with(objectMapper) {
+    override fun registerModules(configureMapper: ObjectMapper) {
+        with(configureMapper) {
             registerModule(SimpleModule().addAbstractTypeMapping(IProcessorSettings::class.java, Settings::class.java))
         }
     }
