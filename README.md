@@ -1,4 +1,4 @@
-# Healer data processor (0.0.2)
+# Healer data processor (0.0.3)
 
 Healer data processor fixes wrong status of events. When a child event has a "failed" status and its parent
 has a "success" status, the status of the parent is wrong. Healer finds the parent event and makes its status "failed", too.
@@ -82,3 +82,17 @@ parameters.
 + th2-common - https://github.com/th2-net/th2-common-j
 
 + th2-crawler - https://github.com/th2-net/th2-crawler
+
+## Release notes
+
+### 0.0.3
+* Migrated to th2 gradle plugin `0.1.4` (based on th2-bom: `4.8.0`)
+* Updated:
+  * common: `5.14.0-dev`
+  * common-utils: `2.3.0-dev`
+  * processor-core: `0.3.0-dev`
+  * cradle-cassandra: `5.4.4-dev`
+  * auto-service: `1.1.1`
+  * caffeine: `3.1.8`
+  * kotlin-logging: `3.0.5`
+  * kotlin: `1.8.22`
