@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Exactpro (Exactpro Systems Limited)
+ * Copyright 2022-2024 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -245,8 +245,8 @@ class ProcessorTest {
         verify(cradleStorage, times(3).description("Load events")).getTestEvent(any())
 
         verify(cradleStorage, never().description("Update event A")).updateEventStatus(eq(eventA), eq(false))
-        verify(cradleStorage, times(1).description("Update event B")).updateEventStatus(eq(eventB), eq(false))
-        verify(cradleStorage, times(1).description("Update event C")).updateEventStatus(eq(eventC), eq(false))
+        verify(cradleStorage, times(2).description("Update event B")).updateEventStatus(eq(eventB), eq(false))
+        verify(cradleStorage, times(2).description("Update event C")).updateEventStatus(eq(eventC), eq(false))
         verify(cradleStorage, never().description("Update event D")).updateEventStatus(eq(eventD), eq(false))
         verify(cradleStorage, times(2).description("Update events")).updateEventStatus(any(), any())
 
@@ -396,7 +396,7 @@ class ProcessorTest {
         success,
         ByteArray(10),
         emptySet(),
-        PageId(bookId, PAGE_NAME),
+        PageId(bookId, PAGE_TIMESTAMP, PAGE_NAME),
         null,
         Instant.now()
     )
@@ -410,6 +410,7 @@ class ProcessorTest {
         private const val C_EVENT_ID = "c_event_id"
         private const val D_EVENT_ID = "d_event_id"
 
+        private val PAGE_TIMESTAMP = Instant.now()
         private val SETTINGS = Settings(1, 1, TimeUnit.MILLISECONDS, 3)
         private val PROCESSOR_EVENT_ID = EventID.newBuilder().apply {
             bookName = BOOK_NAME
