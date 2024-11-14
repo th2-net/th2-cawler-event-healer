@@ -112,6 +112,24 @@ spec:
         - name: grpc
           containerPort: 8080
   pins:
+    mq:
+      subscribers:
+        - name: from_codec_transport
+          attributes:
+            - from_codec
+            - transport-group
+            - subscribe
+        - name: from_codec_proto
+          attributes:
+            - from_codec
+            - parsed
+            - subscribe
+      publishers:
+        - name: to_codec
+          attributes:
+            - to_codec
+            - transport-group
+            - publish
     grpc:
       server:
         - name: server
