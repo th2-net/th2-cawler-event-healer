@@ -2,7 +2,7 @@ plugins {
     id "application"
     id "org.jetbrains.kotlin.jvm" version "1.8.22"
     id "org.jetbrains.kotlin.kapt" version "1.8.22"
-    id "com.exactpro.th2.gradle.component" version "0.1.4"
+    id "com.exactpro.th2.gradle.component" version "0.1.5"
 }
 
 group 'com.exactpro.th2'
