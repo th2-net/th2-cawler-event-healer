@@ -160,7 +160,7 @@ The event-healer based on the th2-processor-core project, you can look at its re
 ## Release notes
 
 ### 0.0.3
-* Migrated to th2 gradle plugin `0.1.4` (based on th2-bom: `4.8.0`)
+* Migrated to th2 gradle plugin `0.1.5` (based on th2-bom: `4.9.0`)
 * Updated:
   * common: `5.14.0-dev`
   * common-utils: `2.3.0-dev`
